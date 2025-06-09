@@ -2,8 +2,8 @@
 
 **scribe** is a **syslog-ng** and **logrotate** installer for ASUS routers running **Asuswrt-Merlin**
 
-## v3.2.1
-### Updated on 2024-Aug-25
+## v3.2.2
+### Updated on 2025-June-09
 
 ## Getting Started
 
@@ -19,35 +19,14 @@
 
 SSH into the router and run:
 ```bash
-/usr/sbin/curl --retry 3 "https://raw.githubusercontent.com/cynicastic/scribe/master/scribe" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
+/usr/sbin/curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 ```
-
-## *WARNING*
-
-This software was written by someone who very likely didn't know what they were doing.  There is a non-zero chance this software will not function as intended, cause irreparable data loss and/or hardware damage, or accidentally trigger the annihilation of the earth.  End user accepts all these potential outcomes as the unavoidable consequences of existing.
-
-## ToDo:
-
-- [ ] Try to keep up with the seemingly ever-changing syslog-ng
 
 ## Built With
 
 * [vim](https://www.vim.org/ "definitely NOT emacs") - because vi is always there, so I'm not lost on a clean install.
 * amix's [vimrc](https://github.com/amix/vimrc) - basic version.
 
-## Contributing
-
-#### Code:
-This has been a learning project for me, so I'm probably more married to my way of doing things than I should be.  Not to say suggestions aren't appreciated - they are and will be considered; but they are likely to be altered to my way of thinking about things if I add them, even if your way is clearly better.
-
-#### Money:
-Even if you think this is the best thing since sliced bread, please do not enquire about sending me money.  If I accepted money, I'll feel obligated to keep improving this, and I've got more than enough obligations in life at this point.  
-
-## Authors
-
-"Success has many fathers, but failure is a bastard child."
-
-This isn't high school, it's all open book and copying from your neighbor is encouraged.  All the good bits I stole from someone else, all the crap bits and errors are mine.
 
 ## Acknowledgments
 
@@ -67,6 +46,3 @@ This isn't high school, it's all open book and copying from your neighbor is enc
 * I'm sure I missed someone, if it's you, I'm sorry, it wasn't intentional.  
 
 * Template used for thie README shamelessly stolen from [PurpleBooth](https://gist.github.com/PurpleBooth/109311bb0361f32d87a2 "don't reinvent the wheel")
-
-#### Seriously?
-Are you really still reading this?  I'd have probably lost interest about halfway through.

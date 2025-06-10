@@ -1,8 +1,10 @@
 #!/bin/sh -
 #
 # NB: rc.func only runs PRECMD on "start"
+# Last Modified: 2025-Jun-10
 
-kill_logger(){
+kill_logger()
+{
     # these will be set if coming from scribe; on bootup, these will not be set
     [ -z "$script_conf" ] && script_conf="/jffs/addons/scribe.d/config"
     [ -z "$optmsg" ] && optmsg="/opt/var/log/messages"
@@ -77,14 +79,20 @@ kill_logger(){
         [ ! -L "$tmplog-1" ] && /bin/ln -s "$syslog_loc-1" "$tmplog-1"
     fi
 
-    # create /opt/var/run/syslog-ng/ directory if it doesn't exist
+    # create /opt/var/run/syslog-ng/ directory if it doesn't exist #
     # not needed for older versions of syslog-ng, but doesn't hurt anything
     [ ! -d "/opt/var/run/syslog-ng" ] && mkdir "/opt/var/run/syslog-ng"
 
-    # touch logroatate.status if it doesn't exist so syslog-ng doesn't whine
-    [ ! -f "/var/lib/logrotate.status" ] && touch "/var/lib/logrotate.status"
+    # touch logrotate.status if it doesn't exist so syslog-ng doesn't whine #
+    [ ! -f /var/lib/logrotate.status ] && touch /var/lib/logrotate.status
 
-    # export timezone if not already set
+    ##----------------------------------------##
+    ## Modified by Martinski W. [2025-Jun-10] ##
+    ##----------------------------------------##
+    # Set correct permissions to avoid "world-readable" status #
+    chmod o-w /var/lib/logrotate.status
+
+    # export timezone if not already set #
     [ -z "$TZ" ] && export export TZ="$( /bin/cat "/etc/TZ" )"
 }
 
@@ -93,4 +101,4 @@ PRECMD="kill_logger"
 # but fills up the logfile fast
 #ARGS="-v"
 
-#eof
+#EOF#

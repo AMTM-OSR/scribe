@@ -3,7 +3,7 @@
 **scribe** is a **syslog-ng** and **logrotate** installer for ASUS routers running **Asuswrt-Merlin**
 
 ## v3.2.2
-### Updated on 2025-June-09
+### Updated on 2025-June-10
 
 ## Getting Started
 
@@ -19,7 +19,7 @@
 
 SSH into the router and run:
 ```bash
-/usr/sbin/curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
+/usr/sbin/curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.sh" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 ```
 
 ## Built With

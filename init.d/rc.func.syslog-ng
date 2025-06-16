@@ -1,7 +1,7 @@
 #!/bin/sh -
 #
 # NB: rc.func only runs PRECMD on "start"
-# Last Modified: 2025-Jun-10
+# Last Modified: 2025-Jun-16
 
 kill_logger()
 {
@@ -87,10 +87,10 @@ kill_logger()
     [ ! -f /var/lib/logrotate.status ] && touch /var/lib/logrotate.status
 
     ##----------------------------------------##
-    ## Modified by Martinski W. [2025-Jun-10] ##
+    ## Modified by Martinski W. [2025-Jun-16] ##
     ##----------------------------------------##
     # Set correct permissions to avoid "world-readable" status #
-    chmod o-w /var/lib/logrotate.status
+    chmod 600 /var/lib/logrotate.status
 
     # export timezone if not already set #
     [ -z "$TZ" ] && export export TZ="$( /bin/cat "/etc/TZ" )"

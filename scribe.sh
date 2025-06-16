@@ -23,7 +23,7 @@
 # shellcheck disable=SC2034
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-June-10
+# Last Modified: 2025-Jun-16
 #-----------------------------------------------------------------
 
 # ensure firmware binaries are used, not Entware
@@ -477,7 +477,7 @@ sed_srvc()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Jun-10] ##
+## Modified by Martinski W. [2025-Jun-16] ##
 ##----------------------------------------##
 lr_post()
 {
@@ -496,7 +496,7 @@ lr_post()
     else
         present
     fi
-    [ -f /var/lib/logrotate.status ] && chmod o-w /var/lib/logrotate.status
+    [ -f /var/lib/logrotate.status ] && chmod 600 /var/lib/logrotate.status
 }
 
 sed_umnt()

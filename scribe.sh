@@ -64,7 +64,7 @@ done
 
 # scribe constants #
 readonly script_name="scribe"
-scribe_branch="master"
+scribe_branch="develop"
 readonly script_branch="$scribe_branch"
 readonly scribe_ver="v3.2.2" # version number for amtm compatibility, but keep vX.Y_Z otherwise because I'm stubborn
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"

@@ -37,6 +37,7 @@ jobs:
         run: |
           VERSION=$(grep -E '^readonly[[:space:]]+scribe_ver=' scribe.sh \
                    | cut -d '=' -f2 \
+                   | cut -d '#' -f1 \
                    | tr -d '"[:space:]')
 
           # Fallback to previous logic only if unable to read from script
@@ -85,7 +86,7 @@ jobs:
       # 6--- Create and push the tag taken from Script.sh
       - name: Create and Push Tag
         run: |
-          TAG=${{ steps.nextver.outputs.tag }}
+          TAG="${{ steps.nextver.outputs.tag }}"
           # Skip if the tag already exists (avoids fatal push error)
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists – skipping creation"

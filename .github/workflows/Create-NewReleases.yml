@@ -3,7 +3,7 @@ name: Auto Tag and Release on PR Merge
 on:
   pull_request:
     branches:
-      - 'main'
+      - 'master'
     types:
       - closed
 
@@ -17,12 +17,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1--- Check out main so we tag the exact merge commit
+      # 1--- Check out master so we tag the exact merge commit
       - name: Checkout source code
         uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
-          ref: 'main'
+          ref: 'master'
           ssh-key: ${{ secrets.DEPLOY_KEY }}
 
       # 2--- Configure author details for any subsequent commits
@@ -76,7 +76,7 @@ jobs:
           git add scribe.sh
           if ! git diff --cached --quiet; then
             git commit -m 'Set scribe_branch to "master" after merge'
-            git push origin main
+            git push origin master
           else
             echo "No branch change needed"
           fi

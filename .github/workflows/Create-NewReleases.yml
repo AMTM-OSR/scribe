@@ -38,8 +38,6 @@ jobs:
           VERSION=$(grep -E '^readonly[[:space:]]+scribe_ver=' scribe.sh \
                    | cut -d '=' -f2 \
                    | tr -d '"[:space:]')
-          # Ensure the tag starts with "v"
-          [[ $VERSION != v* ]] && VERSION="v$VERSION"
 
           # Fallback to previous logic only if unable to read from script
           if [[ -z "$VERSION" ]]; then
@@ -61,6 +59,9 @@ jobs:
             fi
             VERSION="v$MAJOR.$MINOR.$PATCH"
           fi
+
+          # Ensure the tag starts with "v"
+          [[ $VERSION != v* ]] && VERSION="v$VERSION"
 
           echo "Using version tag $VERSION"
           echo "tag=$VERSION" >> "$GITHUB_OUTPUT"

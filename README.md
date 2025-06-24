@@ -3,7 +3,7 @@
 **scribe** is a **syslog-ng** and **logrotate** installer for ASUS routers running **Asuswrt-Merlin**
 
 ## v3.2.2
-### Updated on 2025-June-16
+### Updated on 2025-June-23
 
 ## Getting Started
 
@@ -45,4 +45,4 @@ SSH into the router and run:
 
 * I'm sure I missed someone, if it's you, I'm sorry, it wasn't intentional.  
 
-* Template used for thie README shamelessly stolen from [PurpleBooth](https://gist.github.com/PurpleBooth/109311bb0361f32d87a2 "don't reinvent the wheel")
+* Template used for this README shamelessly stolen from [PurpleBooth](https://gist.github.com/PurpleBooth/109311bb0361f32d87a2 "don't reinvent the wheel")

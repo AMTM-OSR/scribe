@@ -16,29 +16,31 @@
 # install command:
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
+# shellcheck disable=SC1090
 # shellcheck disable=SC2009
 # SC2009 = Consider uing pgrep ~ Note that pgrep doesn't exist in asuswrt (exists in Entware procps-ng)
 # shellcheck disable=SC2059
 # SC2059 = Don't use variables in the printf format string. Use printf "..%s.." "$foo" ~ I (try to) only embed the ansi color escapes in printf strings
 # shellcheck disable=SC2034
+# shellcheck disable=SC3043
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-Jun-16
+# Last Modified: 2025-Jun-23
 #-----------------------------------------------------------------
 
 # ensure firmware binaries are used, not Entware
 export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
 
-# set TMP if not set
+# set TMP if not set #
 [ -z "$TMP" ] && export TMP=/opt/tmp
 
 # parse parameters
 action="X"
 got_zip=false
 banner=true
-[ "$SCRIBE_LOGO" = "nologo"  ] && banner=false
+[ "${SCRIBE_LOGO:=xFALSEx}" = "nologo" ] && banner=false
 
-while [ -n "$1" ]
+while { [ $# -gt 0 ] && [ -n "$1" ] ; }
 do
     case "$1" in
         gotzip)
@@ -64,9 +66,10 @@ done
 
 # scribe constants #
 readonly script_name="scribe"
-scribe_branch="develop"
+scribe_branch="master"
 readonly script_branch="$scribe_branch"
-readonly scribe_ver="v3.2.2" # version number for amtm compatibility, but keep vX.Y_Z otherwise because I'm stubborn
+readonly scribe_ver="v3.2.2"
+# version number for amtm compatibility, but keep vX.Y_Z otherwise because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
 readonly script_long="$scribe_ver ($script_branch)"
@@ -106,8 +109,7 @@ readonly model
 arch="$( uname -m )"
 readonly arch
 
-# miscellaneous constants
-readonly header="=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=$std\n\n"
+# miscellaneous constants #
 readonly sld="syslogd"
 readonly sng="syslog-ng"
 readonly sng_reqd="3.19"
@@ -136,9 +138,9 @@ readonly lr_share="/opt/share/$lr"
 readonly share_ex="/opt/share/*/examples"
 readonly script_bakname="$TMP/${script_name}-backup.tar.gz"
 readonly fire_start="$script_d/firewall-start"
-readonly srvc_event="$script_d/service-event"
-readonly postmount="$script_d/post-mount"
-readonly unmount="$script_d/unmount"
+readonly srvcEvent="$script_d/service-event"
+readonly postMount="$script_d/post-mount"
+readonly unMount="$script_d/unmount"
 readonly skynet="$script_d/firewall"
 readonly sky_req="6.9.2"
 readonly divers="/opt/bin/diversion"
@@ -162,7 +164,9 @@ readonly blue="\033[1;34m"
 readonly magenta="\033[1;35m"
 readonly cyan="\033[1;36m"
 readonly white="\033[1;37m"
-readonly std="\033[m"
+readonly std="\033[0m"
+
+readonly header="=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=${std}\n\n"
 
 # check if scribe is already installed by looking for link in /opt/bin
 [ -e "/opt/bin/$script_name" ] && is_inst=true || is_inst=false
@@ -207,47 +211,97 @@ sng_rng(){ if [ -n "$( pidof $sng )" ]; then true; else false; fi; }
 sld_rng(){ if [ -n "$( pidof $sld )" ]; then true; else false; fi; }
 
 # NB: ensure system log is backed up before doing this!
-clear_loglocs(){
+clear_loglocs()
+{
     dlt $tmplog
     dlt $tmplog-1
     dlt $jffslog
     dlt $jffslog-1
 }
 
-start_syslogd(){
+start_syslogd()
+{
     service start_logger
     count=30
-    while ! sld_rng && [ $count -gt 0 ]
+    while ! sld_rng && [ "$count" -gt 0 ]
     do
         sleep 1 # give syslogd time to start up
-        count=$(( count - 1 ))
+        count="$(( count - 1 ))"
     done
-    if [ $count -eq 0 ]; then printf "\n$red UNABLE TO START SYSLOGD!  ABORTING!\n$std"; exit 1; fi
+    if [ "$count" -eq 0 ]
+    then printf "\n$red UNABLE TO START SYSLOGD!  ABORTING!\n$std"; exit 1
+    fi
 }
 
-# Use caution if adding new variables to existing config file
-write_conf(){
-    [ ! -d $conf_d ] && mkdir $conf_d
-    [ ! -e $script_conf ] && touch $script_conf
+##-------------------------------------##
+## Added by Martinski W. [2025-Jun-22] ##
+##-------------------------------------##
+_ServiceEventTime_()
+{
+    [ ! -d "$conf_d" ] && mkdir "$conf_d"
+    [ ! -e "$script_conf" ] && touch "$script_conf"
+    if [ $# -eq 0 ] || [ -z "$1" ] ; then return 1; fi
+    local timeNotFound  lastEventTime
 
-    if grep -q "SYSLOG_LOC" "$script_conf"
+    if ! grep -q "^SRVC_EVENT_TIME=" "$script_conf"
+    then timeNotFound=true
+    else timeNotFound=false
+    fi
+
+    case "$1" in
+        update)
+            if "$timeNotFound"
+            then
+                echo "SRVC_EVENT_TIME=$2" >> "$script_conf"
+            else
+                sed -i 's/^SRVC_EVENT_TIME=.*$/SRVC_EVENT_TIME='"$2"'/' "$script_conf"
+            fi
+            ;;
+        check)
+            if "$timeNotFound"
+            then
+                lastEventTime=0
+                echo "SRVC_EVENT_TIME=0" >> "$script_conf"
+            else
+                lastEventTime="$(grep "^SRVC_EVENT_TIME=" "$script_conf" | cut -d'=' -f2)"
+                if ! echo "$lastEventTime" | grep -qE "^[0-9]+$"
+                then lastEventTime=0
+                fi
+            fi
+            echo "$lastEventTime"
+            ;;
+    esac
+}
+
+##----------------------------------------##
+## Modified by Martinski W. [2025-Jun-22] ##
+##----------------------------------------##
+CFG_Write_Syslog_Path()
+{
+    [ ! -d "$conf_d" ] && mkdir "$conf_d"
+    [ ! -e "$script_conf" ] && touch "$script_conf"
+    if [ $# -eq 0 ] || [ -z "$1" ] ; then return 1; fi
+
+    if ! grep -q "^SYSLOG_LOC=" "$script_conf"
     then
-        sed -i "s~SYSLOG_LOC=.*~SYSLOG_LOC=$syslog_loc~" $script_conf
+        echo "SYSLOG_LOC=$1" >> "$script_conf"
     else
-        echo "SYSLOG_LOC=$syslog_loc" > $script_conf
+        sed -i "s~SYSLOG_LOC=.*~SYSLOG_LOC=$1~" "$script_conf"
     fi
 }
 
 # random routers point syslogd at /jffs instead of /tmp
 # figure out where default syslog.log location is
 # function assumes syslogd is running!
-where_syslogd(){
+where_syslogd()
+{
     sld_ps="$( ps ww | grep "syslogd" )"
     syslog_loc="$( awk -v psww="$sld_ps" 'BEGIN { n=split (psww, psary); for (i = 1; i <= n; i++) if ( psary[i] ~ "-O" ) break; print psary[i+1] }' )"
-    write_conf
+    CFG_Write_Syslog_Path "$syslog_loc"
 }
 
-create_conf(){
+create_conf()
+{
     printf "\n$white Detecting default syslog location "
     if sng_rng
     then
@@ -258,7 +312,7 @@ create_conf(){
         while sng_rng && [ "$count" -gt 0 ]
         do
             sleep 1
-            count=$(( count - 1 ))
+            count="$(( count - 1 ))"
         done
         clear_loglocs
     else
@@ -267,7 +321,7 @@ create_conf(){
 
     if ! sld_rng; then start_syslogd; fi
     where_syslogd
-    if $slg_was_rng
+    if "$slg_was_rng"
     then
         # if syslog-ng was running, kill syslogd and restart
         $S01sng_init start
@@ -279,17 +333,19 @@ create_conf(){
     # assume uiScribe is still running if it was before stopping syslog-ng #
 }
 
-read_conf(){
-    if [ -f $script_conf ]
+read_conf()
+{
+    if [ -f "$script_conf" ]
     then # assumes if $script_conf exists, it is correctly formatted
-        syslog_loc="$(grep "SYSLOG_LOC" "$script_conf" | cut -f2 -d"=")"
+        syslog_loc="$(grep "^SYSLOG_LOC=" "$script_conf" | cut -f2 -d'=')"
     else # scribe started with no config file
         create_conf
     fi
     export syslog_loc
 }
 
-update_file(){
+update_file()
+{
     [ -n "$3" ] && [ "$3" = "backup" ] && date_stamp "$2"
     cp -pf "$1" "$2"
 }
@@ -360,7 +416,7 @@ Get_ZIP_File()
 
 Hup_uiScribe()
 {
-    if $uiscribeInstalled
+    if "$uiscribeInstalled"
     then
         printf "$white Restarting uiScribe ..."
         $uiscribePath startup
@@ -434,8 +490,8 @@ syslogd_check()
         printf "$green %s $std\n" "$syslog_loc"
     fi
     printf "$white %34s" "... & agrees with config file ..."
-    checksys_loc="$(grep "SYSLOG_LOC" "$script_conf" | cut -f2 -d"=")"
-    if [ ! -f $script_conf ]
+    checksys_loc="$(grep "^SYSLOG_LOC=" "$script_conf" | cut -f2 -d'=')"
+    if [ ! -f "$script_conf" ]
     then # scribe started with no config file
         printf "$red NO CONFIG FILE!\n"
         rd_warn
@@ -450,30 +506,29 @@ syslogd_check()
     fi
 }
 
-sed_srvc()
+sed_srvcEvent()
 {
-    printf "$white %34s" "checking $( strip_path $srvc_event ) ..."
-    if [ -f $srvc_event ]
+    printf "$white %34s" "checking $( strip_path "$srvcEvent" ) ..."
+    if [ -f "$srvcEvent" ]
     then
-        [ "$( grep -c "#!/bin/sh" $srvc_event )" -ne 1 ] && sed -i "1s~^~#!/bin/sh -\n\n~" $srvc_event
-        if grep -q "$script_name kill-logger" $srvc_event; then sed -i "/$script_name kill-logger/d" $srvc_event; fi
-        if grep -q "$script_name kill_logger" $srvc_event; then sed -i "/$script_name kill_logger/d" $srvc_event; fi
-        if ! grep -q "$script_name service_event" $srvc_event
+        [ "$( grep -c "#!/bin/sh" "$srvcEvent" )" -ne 1 ] && sed -i "1s~^~#!/bin/sh -\n\n~" "$srvcEvent"
+        if grep -q "$script_name kill-logger" "$srvcEvent" ; then sed -i "/$script_name kill-logger/d" "$srvcEvent" ; fi
+        if grep -q "$script_name kill_logger" "$srvcEvent" ; then sed -i "/$script_name kill_logger/d" "$srvcEvent" ; fi
+        if ! grep -q "$script_name service_event" "$srvcEvent"
         then
-            echo "$script_loc service_event \"\$@\" & # added by $script_name" >> $srvc_event
+            echo "$script_loc service_event \"\$@\" & # added by $script_name" >> "$srvcEvent"
             updated
         else
             present
         fi
     else
         {
-            echo "#!/bin/sh -"
-            echo ""
+            echo "#!/bin/sh -" ; echo
             echo "$script_loc service_event \"\$@\" & # added by $script_name"
-        } > $srvc_event
+        } > "$srvcEvent"
         printf "$green created. $std\n"
     fi
-    [ ! -x $srvc_event ] && chmod 0755 $srvc_event
+    [ ! -x "$srvcEvent" ] && chmod 0755 "$srvcEvent"
 }
 
 ##----------------------------------------##
@@ -481,17 +536,17 @@ sed_srvc()
 ##----------------------------------------##
 lr_post()
 {
-    printf "$white %34s" "checking $( strip_path "$postmount" ) ..."
-    if [ ! -f "$postmount" ]
+    printf "$white %34s" "checking $( strip_path "$postMount" ) ..."
+    if [ ! -f "$postMount" ]
     then
         printf "$red MISSING! \n"
         printf " Entware is not properly set up!\n"
         printf " Correct Entware installation before continuing! $std\n\n"
         exit 1
     fi
-    if ! grep -q "$lr" "$postmount"
+    if ! grep -q "$lr" "$postMount"
     then
-        echo "cru a $lr \"5 0 * * * $lr_loc $lr_conf >> $lr_daily 2>&1\" # added by $script_name" >> "$postmount"
+        echo "cru a $lr \"5 0 * * * $lr_loc $lr_conf >> $lr_daily 2>&1\" # added by $script_name" >> "$postMount"
         updated
     else
         present
@@ -499,28 +554,27 @@ lr_post()
     [ -f /var/lib/logrotate.status ] && chmod 600 /var/lib/logrotate.status
 }
 
-sed_umnt()
+sed_unMount()
 {
-    printf "$white %34s" "checking $( strip_path $unmount ) ..."
-    if [ -f $unmount ]
+    printf "$white %34s" "checking $( strip_path "$unMount" ) ..."
+    if [ -f "$unMount" ]
     then
-        [ "$( grep -c "#!/bin/sh" $unmount )" -ne 1 ] && sed -i "1s~^~#!/bin/sh -\n\n~" $unmount
-        if ! grep -q "$script_name stop" $unmount
+        [ "$( grep -c "#!/bin/sh" "$unMount" )" -ne 1 ] && sed -i "1s~^~#!/bin/sh -\n\n~" "$unMount"
+        if ! grep -q "$script_name stop" "$unMount"
         then
-            echo "[ \"\$(find \$1/entware*/bin/$script_name 2> /dev/null)\" ] && $script_name stop nologo # added by $script_name" >> $unmount
+            echo "[ \"\$(find \$1/entware*/bin/$script_name 2> /dev/null)\" ] && $script_name stop nologo # added by $script_name" >> "$unMount"
             updated
         else
             present
         fi
     else
         {
-            echo "#!/bin/sh"
-            echo ""
+            echo "#!/bin/sh" ; echo
             echo "[ \"\$(find \$1/entware*/bin/$script_name 2> /dev/null)\" ] && $script_name stop nologo # added by $script_name"
-        } > $unmount
+        } > "$unMount"
         printf "$green created. $std\n"
     fi
-    [ ! -x $unmount ] && chmod 0755 $unmount
+    [ ! -x "$unMount" ] && chmod 0755 "$unMount"
 }
 
 lr_cron()
@@ -540,10 +594,12 @@ dir_links()
     printf "$white %34s" "checking directory links ..."
     if [ ! -L "$syslog_loc" ] || [ ! -d "/opt/var/run/syslog-ng" ]
     then
+        #################################################################
         # load kill_logger() function to reset system path links/hacks
         # keep shellcheck from barfing on sourcing $rcfunc_loc
-        # shellcheck disable=SC1091
+        # shellcheck disable=SC1090
         # shellcheck source=/opt/etc/init.d/rc.func.syslog-ng
+        #################################################################
         . $rcfunc_loc
         kill_logger
         updated
@@ -747,10 +803,10 @@ menu_status()
     syslogd_check
     printf "\n$magenta checking system for necessary %s hooks ...\n\n" "$script_name"
     sed_sng
-    if sng_rng; then sed_srvc; fi
+    if sng_rng; then sed_srvcEvent; fi
     lr_post
-    sed_umnt
-    if sng_rng; then lr_cron; dir_links;fi
+    sed_unMount
+    if sng_rng; then lr_cron; dir_links; fi
     printf "\n$magenta checking %s configuration ...\n\n" "$sng"
     sync_conf
     sng_syntax
@@ -776,8 +832,8 @@ setup_sng()
     printf "\n$magenta setting up %s ...\n$std" "$sng"
     copy_rcfunc
     sed_sng
-    sed_srvc
-    sed_umnt
+    sed_srvcEvent
+    sed_unMount
     if [ "$( md5_file "$sng_share/examples/$sng.conf-scribe" )" != "$( md5_file "$sng_conf" )" ]
     then
         printf "$white %34s" "updating $( strip_path $sng_conf ) ..."
@@ -869,7 +925,7 @@ Install_uiScribe()
 Uninstall_uiScribe()
 {
     printf "\n"
-    if $uiscribeInstalled
+    if "$uiscribeInstalled"
     then
         printf "$white uiScribe add-on is detected, uninstalling ...\n\n"
         $uiscribePath uninstall
@@ -978,7 +1034,7 @@ menu_install()
         rld_sngconf
         printf "\n$white %s setup complete!\n\n" "$script_name"
         enter_to "continue"
-        if ! $uiscribeInstalled; then Install_uiScribe; fi
+        if ! "$uiscribeInstalled" ; then Install_uiScribe ; fi
 }
 
 menu_restart()
@@ -1021,11 +1077,11 @@ uninstall()
 {
     printf "\n\n"
     banner=false  # suppress certain messages #
-    if [ -e $sng_loc ]
+    if [ -e "$sng_loc" ]
     then
         if sng_rng; then stop_sng; fi
-        sed -i "/$script_name service_event/d" $srvc_event
-        sed -i "/$script_name stop/d" $unmount
+        sed -i "/$script_name stop/d" "$unMount"
+        sed -i "/$script_name service_event/d" "$srvcEvent"
         dlt "$S01sng_init"
         dlt "$rcfunc_loc"
         printf "\n$cyan"
@@ -1043,10 +1099,10 @@ uninstall()
         not_installed "$sng"
     fi
 
-    if [ -e $lr_loc ]
+    if [ -e "$lr_loc" ]
     then
         stop_lr
-        sed -i "/cru a $lr/d" "$postmount"
+        sed -i "/cru a $lr/d" "$postMount"
         printf "\n$cyan"
         /opt/bin/opkg remove "$lr"
         dlt "$lr_conf"
@@ -1166,7 +1222,8 @@ menu_filters()
     fi
 }
 
-menu_update(){
+menu_update()
+{
     if [ "$new_vers" = "major" ] || [ "$new_vers" = "minor" ]
     then
         [ "$new_vers" = "major" ] && printf "\n$green    New version" || printf "$cyan    Minor update"
@@ -1192,7 +1249,8 @@ menu_update(){
     fi
 }
 
-menu_forgrnd(){
+menu_forgrnd()
+{
     restrt=false
     if sng_rng
     then
@@ -1240,7 +1298,7 @@ gather_debug()
         ls -ld /tmp/syslog*
         ls -ld /jffs/syslog*
         ls -ld $optmsg
-        ls -ld $script_conf
+        ls -ld "$script_conf"
         printf "\n%s\n### top output:\n" "$debug_sep"
         top -b -n1 | head
         printf "\n%s\n### *log references in top:\n" "$debug_sep"
@@ -1393,7 +1451,7 @@ EOF
 
 ut_menu()
 {
-    printf "$magenta           %s Utilities $white\n\n" "$script_name"
+    printf "$magenta           %s Utilities ${std}\n\n" "$script_name"
     printf "     bu.   Backup configuration files\n"
     printf "     rt.   Restore configuration files\n\n"
     printf "     d.    Generate debug file\n"
@@ -1406,12 +1464,16 @@ ut_menu()
     printf "     sd.   Run %s debugging mode\n" "$sng"
     printf "     ld.   Show %s debug info\n\n" "$lr"
     printf "     ui.   "
-    if $uiscribeInstalled; then printf "Run"; else printf "Install"; fi
+    if "$uiscribeInstalled"
+    then printf "Run"
+    else printf "Install"
+    fi
     printf " %s\n" "$uiscribeName"
     printf "     e.    Exit to Main Menu\n"
 }
 
-main_menu(){
+main_menu()
+{
     and_lr=" & $lr cron\n"
     if sng_rng
     then
@@ -1448,6 +1510,9 @@ main_menu(){
     printf "     zs.   Remove %s\n" "$script_name"
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2024-Jun-22] ##
+##----------------------------------------##
 scribe_menu()
 {
 	while true
@@ -1557,7 +1622,7 @@ scribe_menu()
                     pause=false
                     ;;
                 ui)
-                    if $uiscribeInstalled
+                    if "$uiscribeInstalled"
                     then
                         $uiscribePath
                         pause=false
@@ -1603,12 +1668,16 @@ scribe_menu()
         else
             not_recog=true
         fi
-        if $not_recog; then printf "\n$red Unrecognized option [%s]\n\n" "$choice"; fi
-        if $pause; then enter_to "continue"; fi
-        if $run_scribe; then sh "$script_loc"; exit 0; fi
+        if $not_recog
+        then
+            [ -n "$choice" ] && \
+            printf "\n${red} INVALID input [$choice]${std}"
+            printf "\n${red} Please choose a valid option.${std}\n\n"
+        fi
+        if "$pause" ; then enter_to "continue" ; fi
+        if "$run_scribe" ; then sh "$script_loc" ; exit 0; fi
     done
 }
-
 
 ##############
 #### MAIN ####
@@ -1616,12 +1685,12 @@ scribe_menu()
 
 if ! sld_rng && ! sng_rng
 then
-    printf "\n\n$red WARNING: $white No system logger was running!!\n"
+    printf "\n\n${red} *WARNING*: $white No system logger was running!!\n"
     printf "Starting system loggers ..."
     start_syslogd
 fi
 
-# read or create config file
+# read or create config file #
 read_conf
 
 if [ "$action" = "menu" ]
@@ -1633,8 +1702,6 @@ else
 fi
 
 case "$action" in
-
-# install syslog-ng, logrotate, & scribe script
     about)
         menu_about
         ;;
@@ -1645,7 +1712,7 @@ case "$action" in
         if $is_inst
         then
             printf "\n$white     *** %s already installed! *** \n\n" "$script_name"
-            printf " Please use menu command 'is' to reinstall. $std\n\n"
+            printf " Please use menu command 'is' to reinstall. ${std}\n\n"
             exit 1
         fi
         pre_install
@@ -1655,13 +1722,13 @@ case "$action" in
         exit 0
         ;;
 
-# uninstall scribe
+    #uninstall scribe#
     uninstall | remove)
         reinst=false
         menu_uninstall
         ;;
 
-# update scribe
+    #update scribe#
     update)
         if sng_rng
         then
@@ -1671,7 +1738,7 @@ case "$action" in
         fi
         ;;
 
-# show total combined config
+    #show total combined config#
     show-config | config)
         if $is_inst
         then
@@ -1679,17 +1746,17 @@ case "$action" in
         fi
         ;;
 
-# verify syslog-ng is running and logrotate is listed in 'cru l'
+    #verify syslog-ng is running and logrotate is listed in 'cru l'#
     status)
         if $is_inst; then menu_status; fi
         ;;
 
-# reload syslog-ng configuration
+    #reload syslog-ng configuration#
     reload)
         if sng_rng; then rld_sngconf; fi
         ;;
 
-# restart (or start if not running) syslog-ng
+    #restart (or start if not running) syslog-ng#
     restart | start)
         if $is_inst
         then
@@ -1698,35 +1765,46 @@ case "$action" in
         fi
         ;;
 
-# stop syslog-ng & logrotate cron job
+    #stop syslog-ng & logrotate cron job#
     stop)
         if sng_rng; then menu_stop; fi
         ;;
 
-# generate debug tarball
+    #generate debug tarball#
     debug)
         if $is_inst; then gather_debug; fi
         ;;
 
-# update syslog-ng and logrotate filters - only used in update process
+    #update syslog-ng and logrotate filters - only used in update process#
     filters)
         if sng_rng; then menu_filters; fi
         ;;
 
-
-# kill syslogd & klogd - only available via cli
+    #kill syslogd & klogd - only available via cli#
     service_event)
         if ! sng_rng || [ "$2" = "stop" ]; then exit 0; fi
+        #################################################################
         # load kill_logger() function to reset system path links/hacks
         # keep shellcheck from barfing on sourcing $rcfunc_loc
-        # shellcheck disable=SC1091
+        # shellcheck disable=SC1090
         # shellcheck source=/opt/etc/init.d/rc.func.syslog-ng
-        . $rcfunc_loc
-        kill_logger
-        sync_conf
+        #################################################################
+        currTimeSecs="$(date +'%s')"
+        lastTimeSecs="$(_ServiceEventTime_ check)"
+        thisTimeDiff="$(echo "$currTimeSecs $lastTimeSecs" | awk -F ' ' '{printf("%s", $1 - $2);}')"
+        if [ "$thisTimeDiff" -ge 120 ]  ##Only once every 2 minutes at most##
+        then
+            _ServiceEventTime_ update "$currTimeSecs"
+            . $rcfunc_loc
+            kill_logger
+            sync_conf
+            _ServiceEventTime_ update "$(date +'%s')"
+        else
+            exit 1
+        fi
         ;;
-        
-# unrecognized command
+
+    #unrecognized command#
     *)
         printf "\n$white Usage: $script_name ( about | uninstall | update | config | status | reload | restart | debug )\n"
         printf " For a brief description of commands, run: $script_name help $std\n\n"

@@ -1,7 +1,7 @@
 #!/bin/sh -
 #
 # NB: rc.func only runs PRECMD on "start"
-# Last Modified: 2025-Jun-16
+# Last Modified: 2025-Jun-18
 
 kill_logger()
 {
@@ -67,11 +67,11 @@ kill_logger()
 
     # make /jffs/syslog.log and log-1 directories if default syslog location is not at /jffs
     # prevents system log saver from writing to jffs (not strictly neecessary on newer routers)
-    if ! $isjffs && [ ! -d "$jffslog" ]
+    if ! "$isjffs" && [ ! -d "$jffslog" ]
     then
         /bin/rm -rf "$jffslog" "$jffslog-1"
         /bin/mkdir "$jffslog" "$jffslog-1"
-    elif $isjffs
+    elif "$isjffs"
     then
         # if syslogd is writing to /jffs, then ensure logfiles in /tmp
         # are properly linked in case something goes looking there
@@ -93,7 +93,7 @@ kill_logger()
     chmod 600 /var/lib/logrotate.status
 
     # export timezone if not already set #
-    [ -z "$TZ" ] && export export TZ="$( /bin/cat "/etc/TZ" )"
+    [ -z "${TZ:+xSETx}" ] && export TZ="$( /bin/cat /etc/TZ )"
 }
 
 PRECMD="kill_logger"

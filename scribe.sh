@@ -26,7 +26,7 @@
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-Jul-08
+# Last Modified: 2025-Jul-11
 #-----------------------------------------------------------------
 
 # ensure firmware binaries are used, not Entware
@@ -74,7 +74,7 @@ readonly scribe_ver="v3.2.3"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25070801"
+readonly scriptVer_TAG="25071122"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly scriptVer_longer="$scribe_ver (Branch: $scribe_branch)"
 readonly script_author="AMTM-OSR"
@@ -499,7 +499,7 @@ sed_sng()
     printf "$white %34s" "checking $( strip_path "$S01sng_init" ) ..."
     if ! grep -q "$rcfunc_sng" "$S01sng_init"
     then
-        sed -i "\~/opt/etc/init.d/rc.func~i . $rcfunc_loc # added by $script_name\n" "$S01sng_init"
+        sed -i "\~/opt/etc/init.d/rc.func$~i . $rcfunc_loc # added by $script_name\n" "$S01sng_init"
         updated
     else
         present
@@ -613,9 +613,9 @@ sed_unMount()
 lr_cron()
 {
     printf "$white %34s" "checking $lr cron job ..."
-    if ! cru l | grep -q $lr
+    if ! cru l | grep -q "$lr"
     then
-        cru a $lr "5 0 * * * $lr_loc $lr_conf >> $lr_daily 2>&1"
+        cru a "$lr" "5 0 * * * $lr_loc $lr_conf >> $lr_daily 2>&1"
         updated
     else
         present
@@ -633,7 +633,7 @@ dir_links()
         # shellcheck disable=SC1091
         # shellcheck source=/opt/etc/init.d/rc.func.syslog-ng
         #################################################################
-        . $rcfunc_loc
+        . "$rcfunc_loc"
         kill_logger
         updated
     else
@@ -1493,10 +1493,10 @@ menu_about()
 {
     printf "About ${magenta}${SCRIPT_VERS_INFO}${std}\n"
     cat <<EOF
-   $script_name replaces the firmware system logging service with
-   syslog-ng (https://github.com/syslog-ng/syslog-ng/releases),
-   which facilitates breaking the monolithic logfile provided by
-   syslog into individualized log files based on user criteria.
+  $script_name replaces the firmware system logging service with
+  syslog-ng (https://github.com/syslog-ng/syslog-ng/releases),
+  which facilitates breaking the monolithic logfile provided by
+  syslog into individualized log files based on user criteria.
 
 License
   $script_name is free to use under the GNU General Public License
@@ -1529,8 +1529,8 @@ Available commands:
   $script_name reload               reload syslog-ng configuration file
   $script_name restart / start      restarts (or starts if not running) syslog-ng
   $script_name debug                creates debug file
-  $script_name develop              switch to development branch
-  $script_name stable               switch to stable/production branch
+  $script_name develop              switch to development branch version
+  $script_name stable               switch to stable/production branch version
   $script_name help                 displays this help
 EOF
     printf "$std\n"
@@ -1895,7 +1895,7 @@ case "$action" in
         if [ "$thisTimeDiff" -ge 120 ]  ##Only once every 2 minutes at most##
         then
             _ServiceEventTime_ update "$currTimeSecs"
-            . $rcfunc_loc
+            . "$rcfunc_loc"
             kill_logger
             sync_conf
             _ServiceEventTime_ update "$(date +'%s')"

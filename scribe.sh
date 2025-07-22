@@ -26,7 +26,7 @@
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-Jul-11
+# Last Modified: 2025-Jul-20
 #-----------------------------------------------------------------
 
 # ensure firmware binaries are used, not Entware
@@ -74,7 +74,7 @@ readonly scribe_ver="v3.2.3"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25071122"
+readonly scriptVer_TAG="25072022"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly scriptVer_longer="$scribe_ver (Branch: $scribe_branch)"
 readonly script_author="AMTM-OSR"
@@ -97,9 +97,12 @@ export tmplog
 ## Added by Martinski W. [2025-Jul-07] ##
 ##-------------------------------------##
 readonly scribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([_.][0-9]{1,2})"
-if [ "$script_branch" != "develop" ]
-then readonly SCRIPT_VERS_INFO=""
-else readonly SCRIPT_VERS_INFO="[${scribe_ver}_$scriptVer_TAG]"
+readonly branchx_TAG="Branch: $script_branch"
+readonly version_TAG="${scribe_ver}_${scriptVer_TAG}"
+
+if [ "$script_branch" = "master" ]
+then SCRIPT_VERS_INFO=""
+else SCRIPT_VERS_INFO="[$version_TAG, $branchx_TAG]"
 fi
 
 ##----------------------------------------##

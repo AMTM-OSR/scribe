@@ -26,7 +26,7 @@
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-Jul-20
+# Last Modified: 2025-Aug-15
 #-----------------------------------------------------------------
 
 # ensure firmware binaries are used, not Entware
@@ -74,7 +74,7 @@ readonly scribe_ver="v3.2.3"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25072022"
+readonly scriptVer_TAG="25081520"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly scriptVer_longer="$scribe_ver (Branch: $scribe_branch)"
 readonly script_author="AMTM-OSR"
@@ -527,10 +527,10 @@ syslogd_check()
     printf "$white %34s" "... & agrees with config file ..."
     checksys_loc="$(grep "^SYSLOG_LOC=" "$script_conf" | cut -f2 -d'=')"
     if [ ! -f "$script_conf" ]
-    then # scribe started with no config file
+    then  # scribe started with no config file #
         printf "$red NO CONFIG FILE!\n"
         rd_warn
-    # assumes if $script_conf exists, it is correctly formatted
+    # assumes if $script_conf exists, it is correctly formatted #
     elif [ "$syslog_loc" = "$checksys_loc" ]
     then
         printf "$green okay! $std\n"
@@ -547,8 +547,12 @@ sed_srvcEvent()
     if [ -f "$srvcEvent" ]
     then
         [ "$( grep -c "#!/bin/sh" "$srvcEvent" )" -ne 1 ] && sed -i "1s~^~#!/bin/sh -\n\n~" "$srvcEvent"
-        if grep -q "$script_name kill-logger" "$srvcEvent" ; then sed -i "/$script_name kill-logger/d" "$srvcEvent" ; fi
-        if grep -q "$script_name kill_logger" "$srvcEvent" ; then sed -i "/$script_name kill_logger/d" "$srvcEvent" ; fi
+        if grep -q "$script_name kill-logger" "$srvcEvent"
+        then sed -i "/$script_name kill-logger/d" "$srvcEvent"
+        fi
+        if grep -q "$script_name kill_logger" "$srvcEvent"
+        then sed -i "/$script_name kill_logger/d" "$srvcEvent"
+        fi
         if ! grep -q "$script_name service_event" "$srvcEvent"
         then
             echo "$script_loc service_event \"\$@\" & # added by $script_name" >> "$srvcEvent"

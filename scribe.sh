@@ -26,7 +26,7 @@
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-Jul-20
+# Last Modified: 2025-Aug-23
 #-----------------------------------------------------------------
 
 # ensure firmware binaries are used, not Entware
@@ -74,9 +74,9 @@ readonly scribe_ver="v3.2.3"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25072022"
+readonly scriptVer_TAG="25082322"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
-readonly scriptVer_longer="$scribe_ver (Branch: $scribe_branch)"
+readonly scriptVer_longer="$scribe_ver [Branch: $scribe_branch]"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
 readonly script_zip_file="$TMP/${script_name}_TEMP.zip"
@@ -97,12 +97,11 @@ export tmplog
 ## Added by Martinski W. [2025-Jul-07] ##
 ##-------------------------------------##
 readonly scribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([_.][0-9]{1,2})"
-readonly branchx_TAG="Branch: $script_branch"
 readonly version_TAG="${scribe_ver}_${scriptVer_TAG}"
 
 if [ "$script_branch" = "master" ]
 then SCRIPT_VERS_INFO=""
-else SCRIPT_VERS_INFO="[$version_TAG, $branchx_TAG]"
+else SCRIPT_VERS_INFO="[$version_TAG]"
 fi
 
 ##----------------------------------------##
@@ -379,9 +378,14 @@ read_conf()
     then chmod 600 /var/lib/logrotate.status ; fi
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2025-Aug-23] ##
+##----------------------------------------##
 update_file()
 {
-    [ -n "$3" ] && [ "$3" = "backup" ] && date_stamp "$2"
+    if [ $# -gt 2 ] && [ "$3" = "backup" ]
+    then date_stamp "$2"
+    fi
     cp -pf "$1" "$2"
 }
 
@@ -413,7 +417,7 @@ ScriptLogo()
     printf "     \\__, \\( (___ | |   | || |_) )(  ___/ \n"
     printf "     (____/\`\\____)(_)   (_)(_,__/'\`\\____) \n"
     printf "     %s and %s installation $std\n" "$sng" "$lr"
-    printf "         $green %-28s$std\n" "$scriptVer_longer"
+    printf "           ${green}%-30s${std}\n" "$scriptVer_longer"
     printf "     ${blue}https://github.com/AMTM-OSR/uiScribe${std}\n"
     printf "          ${blue}Original author: cmkelley${std}\n\n"
 }
@@ -453,7 +457,7 @@ Hup_uiScribe()
 {
     if "$uiScribeInstalled"
     then
-        printf "$white Restarting uiScribe ..."
+        printf "$white Restarting uiScribe ...\n"
         $uiscribePath startup
     fi
 }
@@ -527,10 +531,10 @@ syslogd_check()
     printf "$white %34s" "... & agrees with config file ..."
     checksys_loc="$(grep "^SYSLOG_LOC=" "$script_conf" | cut -f2 -d'=')"
     if [ ! -f "$script_conf" ]
-    then # scribe started with no config file
+    then  # scribe started with no config file #
         printf "$red NO CONFIG FILE!\n"
         rd_warn
-    # assumes if $script_conf exists, it is correctly formatted
+    # assumes if $script_conf exists, it is correctly formatted #
     elif [ "$syslog_loc" = "$checksys_loc" ]
     then
         printf "$green okay! $std\n"
@@ -547,8 +551,12 @@ sed_srvcEvent()
     if [ -f "$srvcEvent" ]
     then
         [ "$( grep -c "#!/bin/sh" "$srvcEvent" )" -ne 1 ] && sed -i "1s~^~#!/bin/sh -\n\n~" "$srvcEvent"
-        if grep -q "$script_name kill-logger" "$srvcEvent" ; then sed -i "/$script_name kill-logger/d" "$srvcEvent" ; fi
-        if grep -q "$script_name kill_logger" "$srvcEvent" ; then sed -i "/$script_name kill_logger/d" "$srvcEvent" ; fi
+        if grep -q "$script_name kill-logger" "$srvcEvent"
+        then sed -i "/$script_name kill-logger/d" "$srvcEvent"
+        fi
+        if grep -q "$script_name kill_logger" "$srvcEvent"
+        then sed -i "/$script_name kill_logger/d" "$srvcEvent"
+        fi
         if ! grep -q "$script_name service_event" "$srvcEvent"
         then
             echo "$script_loc service_event \"\$@\" & # added by $script_name" >> "$srvcEvent"
@@ -888,14 +896,16 @@ setup_lr()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Jul-07] ##
+## Modified by Martinski W. [2025-Aug-23] ##
 ##----------------------------------------##
 doInstall()
 {
-    force=""
-    [ "X$2" = "XFORCE" ] && force="--force-reinstall"
+    forceOpt=""
+    if [ $# -gt 1 ] && [ "$2" = "FORCE" ]
+    then forceOpt="--force-reinstall"
+    fi
     printf "\n$cyan"
-    /opt/bin/opkg install $force "$1" 
+    /opt/bin/opkg install $forceOpt "$1"
     [ "$1" = "$sng" ] && sng_ver_chk
     setup_ddir "$1" "ALL"
     setup_exmpls "$1" "ALL"
@@ -908,7 +918,7 @@ doInstall()
 ##----------------------------------------##
 setup_Scribe()
 {
-    printf "\n$white setting up %s ..." "$script_name"
+    printf "\n$white setting up %s ...\n" "$script_name"
     cp -fp "$unzip_dirPath/${script_name}.sh" "$script_loc"
     chmod 0755 "$script_loc"
     [ ! -e "/opt/bin/$script_name" ] && ln -s "$script_loc" /opt/bin
@@ -920,10 +930,10 @@ setup_Scribe()
         dlt "$lrd_d/firewall"
         if [ ! -e "$sngd_d/skynet" ] || [ "$1" = "ALL" ]
         then
-            printf "$white installing %s Skynet filter ..." "$sng"
+            printf "$white installing %s Skynet filter ...\n" "$sng"
             cp -p "$sng_share/examples/skynet" "$sngd_d" 
         fi
-        printf "$blue setting Skynet log file location$white ..."
+        printf "$blue setting Skynet log file location$white ...\n"
         skynetlog="$( grep -m1 'file("' $sngd_d/skynet | awk -F\" '{ printf ( $2 ); }'; )"
         sh $skynet settings syslog "$skynetlog" > /dev/null 2>&1
     else
@@ -931,9 +941,9 @@ setup_Scribe()
         dlt "$lrd_d/skynet"
         if [ ! -e "$sngd_d/firewall" ] || [ "$1" = "ALL" ]
         then
-            printf "$white installing %s firewall filter ..." "$sng"
+            printf "$white installing %s firewall filter ...\n" "$sng"
             cp -p "$sng_share/examples/firewall" "$sngd_d"
-            printf "$white installing firewall log rotation ..."
+            printf "$white installing firewall log rotation ...\n"
             cp -p "$lr_share/examples/firewall" "$lrd_d"
         fi
     fi
@@ -1092,13 +1102,13 @@ menu_restart()
 
 stop_sng()
 {
-    printf "$white stopping %s ..." "$sng"
+    printf "$white stopping %s ...\n" "$sng"
     $S01sng_init stop
     # remove any syslog links #
     clear_loglocs
     mv -f "$optmsg" "$syslog_loc"
     ln -s "$syslog_loc" "$optmsg"
-    printf "$white starting system klogd and syslogd ..."
+    printf "$white starting system klogd and syslogd ...\n"
     start_syslogd
     if ! $banner; then return; fi
     printf "\n$white %s will be started at next reboot; you\n" "$sng"
@@ -1798,14 +1808,17 @@ else
 fi
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Jul-07] ##
+## Modified by Martinski W. [2025-Aug-23] ##
 ##----------------------------------------##
+cliParamCheck=true
 case "$action" in
     about)
         menu_about
+        cliParamCheck=false
         ;;
     help)
         menu_help
+        cliParamCheck=false
         ;;
     install)
         if "$scribeInstalled"
@@ -1913,14 +1926,14 @@ case "$action" in
         ;;
 esac
 
-if ! "$scribeInstalled"
+if ! "$scribeInstalled" && "$cliParamCheck"
 then
-    printf "\n$yellow %s $white not installed, command \"%s\" not valid!$std\n\n" "$script_name" "$action"
-elif ! sng_rng && [ "$action" != "stop" ]
+    printf "\n${yellow} %s ${white}is NOT installed, command \"%s\" not valid!${std}\n\n" "$script_name" "$action"
+elif ! sng_rng && [ "$action" != "stop" ] && "$cliParamCheck"
 then
-    printf "\n$yellow %s $white not running, command \"%s\" not valid!$std\n\n" "$sng" "$action"
+    printf "\n${yellow} %s ${white}is NOT running, command \"%s\" not valid!${std}\n\n" "$sng" "$action"
 else
-    printf "\n"
+    echo
 fi
 
 #EOF#

@@ -12,16 +12,16 @@ kill_logger()
     [ -z "$tmplog" ] && tmplog="/tmp/syslog.log"
     isjffs=false
 
-    # figure out where syslogd expects log file to live
-    if [ -z "$syslog_loc" ] # don't look for config file if $syslog_loc is defined
+    # figure out where syslogd expects log file to live #
+    if [ -z "$syslog_loc" ] # don't look for config file if $syslog_loc is defined #
     then
-        # $syslog_loc not set, look for config file
+        # $syslog_loc not set, look for config file #
         if [ -f "$script_conf" ]
         then
             syslog_loc="$( /bin/grep "SYSLOG_LOC" "$script_conf" | /usr/bin/cut -f2 -d"=" )"
         # no config file and $syslog_loc is not set; check if syslogd is running 
         elif [ -n "$( /bin/pidof syslogd )" ]
-        then # awk to the rescue
+        then # awk to the rescue #
             sld_ps="$( /bin/ps ww | /bin/grep "/sbin/syslogd" )"
             syslog_loc="$( /usr/bin/awk -v psww="$sld_ps" 'BEGIN {
                            n=split (psww, psary)
@@ -30,27 +30,27 @@ kill_logger()
                            print psary[i+1] }'
                          )"
         else # no config file, $syslog_loc not set, & syslogd not running!!! 
-            syslog_loc="$tmplog" # no-man's land, so make a guess
+            syslog_loc="$tmplog"  # no-man's land, so make a guess #
         fi
     fi
 
     [ "$syslog_loc" = "$jffslog" ] && isjffs=true
 
-    # kill any/all running klogd and/or syslogd
+    # kill any/all running klogd and/or syslogd #
     count=30
     klgk=false
     sldk=false
-    while [ $count -gt 0 ]
+    while [ "$count" -gt 0 ]
     do
         [ -n "$( /bin/pidof klogd )" ] && killall klogd
         [ -n "$( /bin/pidof syslogd )" ] && killall syslogd
-        sleep 1 # give them a moment to shut down / unknown process to restart them
+        sleep 1 # give them a moment to shut down / unknown process to restart them #
         [ -z "$( /bin/pidof klogd )" ] && klgk=true
         [ -z "$( /bin/pidof syslogd )" ] && sldk=true
-        if $klgk && $sldk; then count=-1; fi
-        count=$(( count - 1 ))
+        if "$klgk" && "$sldk" ; then count=-1 ; fi
+        count="$(( count - 1 ))"
     done
-    [ $count -eq 0 ] && exit 1
+    [ "$count" -eq 0 ] && exit 1
 
     # if syslog-ng was stopped by scribe, /opt/var/log/messages will symlink to $syslog_loc
     [ -L "$optmsg" ] && /bin/rm -f "$optmsg"
@@ -93,7 +93,7 @@ kill_logger()
     chmod 600 /var/lib/logrotate.status
 
     # export timezone if not already set #
-    [ -z "${TZ:+xSETx}" ] && export TZ="$( /bin/cat /etc/TZ )"
+    [ -z "${TZ:+xSETx}" ] && export TZ="$(/bin/cat /etc/TZ)"
 }
 
 PRECMD="kill_logger"

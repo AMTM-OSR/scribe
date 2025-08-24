@@ -13,10 +13,11 @@
 # Original interest in syslog-ng on Asuswrt-Merlin inspired by tomsk & kvic
 # Good ideas and code borrowed heavily from Adamm, dave14305, Jack Yaz, thelonelycoder, & Xentrx
 #
-# install command:
+# Installation command:
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 # shellcheck disable=SC1090
+# shellcheck disable=SC1091
 # shellcheck disable=SC2009
 # SC2009 = Consider uing pgrep ~ Note that pgrep doesn't exist in asuswrt (exists in Entware procps-ng)
 # shellcheck disable=SC2059
@@ -25,7 +26,7 @@
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-Jun-23
+# Last Modified: 2025-Aug-23
 #-----------------------------------------------------------------
 
 # ensure firmware binaries are used, not Entware
@@ -66,19 +67,18 @@ done
 
 # scribe constants #
 readonly script_name="scribe"
-scribe_branch="master"
-readonly script_branch="$scribe_branch"
-readonly scribe_ver="v3.2.2"
-# version number for amtm compatibility, but keep vX.Y_Z otherwise because I'm stubborn #
+scribe_branch="develop"
+script_branch="$scribe_branch"
+# Version number for amtm compatibility #
+readonly scribe_ver="v3.2.3"
+# Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly script_long="$scribe_ver ($script_branch)"
-readonly script_longer="$scribe_ver (Branch: $script_branch)"
+readonly scriptVer_TAG="25082322"
+readonly scriptVer_long="$scribe_ver ($scribe_branch)"
+readonly scriptVer_longer="$scribe_ver [Branch: $scribe_branch]"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
-readonly script_repo_file="$raw_git/$script_author/$script_name/$script_branch/${script_name}.sh"
-readonly script_repo_ZIP="https://github.com/$script_author/$script_name/archive/${script_branch}.zip"
-readonly unzip_dir="$TMP/${script_name}-$script_branch"
 readonly script_zip_file="$TMP/${script_name}_TEMP.zip"
 readonly script_tmp_file="$TMP/${script_name}_TEMP.tmp"
 readonly script_d="/jffs/scripts"
@@ -93,16 +93,31 @@ export optmsg
 export jffslog
 export tmplog
 
+##-------------------------------------##
+## Added by Martinski W. [2025-Jul-07] ##
+##-------------------------------------##
+readonly scribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([_.][0-9]{1,2})"
+readonly version_TAG="${scribe_ver}_${scriptVer_TAG}"
+
+if [ "$script_branch" = "master" ]
+then SCRIPT_VERS_INFO=""
+else SCRIPT_VERS_INFO="[$version_TAG]"
+fi
+
 ##----------------------------------------##
-## Modified by Martinski W. [2024-Aug-25] ##
+## Modified by Martinski W. [2025-Jul-07] ##
 ##----------------------------------------##
-# router details
-readonly merlin="ASUSWRT-Merlin"
-readonly fwreqd="3004.380.68"
-fwname="$( uname -o )"
-readonly fwname
-fwvers="$(nvram get firmver | sed 's/\.//g').$( nvram get buildno )"
-readonly fwvers
+# router details #
+readonly wrtMerlin="ASUSWRT-Merlin"
+readonly fwVerReqd="3004.380.68"
+fwName="$( uname -o )"
+readonly fwName
+fwVerBuild="$(nvram get firmver | sed 's/\.//g').$( nvram get buildno )"
+fwVerExtNo="$(nvram get extendno)"
+fwVersFull="${fwVerBuild}.${fwVerExtNo:=0}"
+readonly fwVerBuild
+readonly fwVerExtNo
+readonly fwVersFull
 model="$( nvram get odmpid )"
 [ -z "$model" ] && model="$( nvram get productid )"
 readonly model
@@ -119,19 +134,19 @@ readonly S01sng_init="$init_d/S01$sng"
 readonly rcfunc_sng="rc.func.$sng"
 readonly rcfunc_loc="$init_d/$rcfunc_sng"
 readonly sng_loc="/opt/sbin/$sng"
-readonly sngctl_loc="$sng_loc-ctl"
+readonly sngctl_loc="${sng_loc}-ctl"
 readonly lr_loc="/opt/sbin/$lr"
-readonly sng_conf="/opt/etc/$sng.conf"
+readonly sng_conf="/opt/etc/${sng}.conf"
 readonly debug_sep="=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*="
 readonly script_debug_name="${script_name}_debug.log"
 readonly script_debug="$TMP/$script_debug_name"
-readonly sngconf_merged="$TMP/$sng-complete.conf"
-readonly sngconf_error="$TMP/$sng-error.conf"
-readonly lr_conf="/opt/etc/$lr.conf"
+readonly sngconf_merged="$TMP/${sng}-complete.conf"
+readonly sngconf_error="$TMP/${sng}-error.conf"
+readonly lr_conf="/opt/etc/${lr}.conf"
 readonly lr_daily="/opt/tmp/logrotate.daily"
 readonly lr_temp="/opt/tmp/logrotate.temp"
-readonly sngd_d="/opt/etc/$sng.d"
-readonly lrd_d="/opt/etc/$lr.d"
+readonly sngd_d="/opt/etc/${sng}.d"
+readonly lrd_d="/opt/etc/${lr}.d"
 readonly etc_d="/opt/etc/*.d"
 readonly sng_share="/opt/share/$sng"
 readonly lr_share="/opt/share/$lr"
@@ -147,7 +162,7 @@ readonly divers="/opt/bin/diversion"
 readonly div_req="4.1"
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Jun-09] ##
+## Modified by Martinski W. [2025-Jul-07] ##
 ##----------------------------------------##
 # uiScribe constants #
 readonly uiscribeName="uiScribe"
@@ -155,6 +170,7 @@ readonly uiscribeAuthor="AMTM-OSR"
 readonly uiscribeBranch="master"
 readonly uiscribeRepo="$raw_git/$uiscribeAuthor/$uiscribeName/$uiscribeBranch/${uiscribeName}.sh"
 readonly uiscribePath="$script_d/$uiscribeName"
+readonly uiscribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})"
 
 # color constants
 readonly red="\033[1;31m"
@@ -168,11 +184,11 @@ readonly std="\033[0m"
 
 readonly header="=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=${std}\n\n"
 
-# check if scribe is already installed by looking for link in /opt/bin
-[ -e "/opt/bin/$script_name" ] && is_inst=true || is_inst=false
+# check if Scribe is already installed by looking for link in /opt/bin #
+[ -e "/opt/bin/$script_name" ] && scribeInstalled=true || scribeInstalled=false
 
 # check if uiScribe is installed #
-[ -e "$uiscribePath" ] && uiscribeInstalled=true || uiscribeInstalled=false
+[ -e "$uiscribePath" ] && uiScribeInstalled=true || uiScribeInstalled=false
 
 # check if Skynet is installed
 if [ -e "$fire_start" ] && grep -q "skynetloc" "$fire_start"
@@ -184,6 +200,16 @@ fi
 
 #### functions ####
 
+##-------------------------------------##
+## Added by Martinski W. [2025-Jul-07] ##
+##-------------------------------------##
+SetUpRepoBranchVars()
+{
+   script_repoFile="$raw_git/$script_author/$script_name/$script_branch/${script_name}.sh"
+   script_repo_ZIP="https://github.com/$script_author/$script_name/archive/${script_branch}.zip"
+   unzip_dirPath="$TMP/${script_name}-$script_branch"
+}
+
 present(){ printf "$green present. $std\n"; }
 
 updated(){ printf "$yellow updated. $std\n"; }
@@ -194,7 +220,7 @@ not_installed(){ printf "\n$blue %s$red NOT$white installed! $std\n" "$1"; }
 
 enter_to(){ printf "$white Press <Enter> key to %s: $std" "$1"; read -rs inputKey; echo; }
 
-ver_num(){ echo "$1" | sed 's/v//; s/_/./' | awk -F. '{ printf("%d%03d%02d\n", $1, $2, $3); }'; }
+VersionStrToNum(){ echo "$1" | sed 's/v//; s/_/./' | awk -F. '{ printf("%d%03d%02d\n", $1, $2, $3); }'; }
 
 md5_file(){ md5sum "$1" | awk '{ printf( $1 ); }'; } # get md5sum of file
 
@@ -333,6 +359,9 @@ create_conf()
     # assume uiScribe is still running if it was before stopping syslog-ng #
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2025-Jul-07] ##
+##----------------------------------------##
 read_conf()
 {
     if [ -f "$script_conf" ]
@@ -342,11 +371,21 @@ read_conf()
         create_conf
     fi
     export syslog_loc
+
+    # Set correct permissions to avoid "world-readable" status #
+    if [ "$action" != "debug" ] && \
+       [ -f /var/lib/logrotate.status ]
+    then chmod 600 /var/lib/logrotate.status ; fi
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2025-Aug-23] ##
+##----------------------------------------##
 update_file()
 {
-    [ -n "$3" ] && [ "$3" = "backup" ] && date_stamp "$2"
+    if [ $# -gt 2 ] && [ "$3" = "backup" ]
+    then date_stamp "$2"
+    fi
     cp -pf "$1" "$2"
 }
 
@@ -378,7 +417,7 @@ ScriptLogo()
     printf "     \\__, \\( (___ | |   | || |_) )(  ___/ \n"
     printf "     (____/\`\\____)(_)   (_)(_,__/'\`\\____) \n"
     printf "     %s and %s installation $std\n" "$sng" "$lr"
-    printf "         $green %-28s$std\n" "$script_longer"
+    printf "           ${green}%-30s${std}\n" "$scriptVer_longer"
     printf "     ${blue}https://github.com/AMTM-OSR/uiScribe${std}\n"
     printf "          ${blue}Original author: cmkelley${std}\n\n"
 }
@@ -398,9 +437,9 @@ Get_ZIP_File()
 {
     if ! $got_zip
     then
-        dlt "$unzip_dir"
+        dlt "$unzip_dirPath"
         dlt "$script_zip_file"
-        printf "\n$white fetching %s from GitHub %s branch ...$std\n" "$script_name" "$script_branch"
+        printf "\n$white Fetching %s from GitHub %s branch ...$std\n" "$script_name" "$script_branch"
         if curl -fL --retry 4 --retry-delay 5 --retry-connrefused "$script_repo_ZIP" -o "$script_zip_file"
         then
             printf "\n$white unzipping %s ...$std\n" "$script_name"
@@ -416,9 +455,9 @@ Get_ZIP_File()
 
 Hup_uiScribe()
 {
-    if "$uiscribeInstalled"
+    if "$uiScribeInstalled"
     then
-        printf "$white Restarting uiScribe ..."
+        printf "$white Restarting uiScribe ...\n"
         $uiscribePath startup
     fi
 }
@@ -434,7 +473,7 @@ rld_sngconf()
 copy_rcfunc()
 {
     printf "$white copying %s to %s ...$std" "$rcfunc_sng" "$init_d"
-    cp -pf "$unzip_dir/init.d/$rcfunc_sng" "$init_d/"
+    cp -pf "$unzip_dirPath/init.d/$rcfunc_sng" "$init_d/"
     chmod 644 "$rcfunc_loc"
     finished
 }
@@ -464,10 +503,10 @@ check_sng()
 
 sed_sng()
 {
-    printf "$white %34s" "checking $( strip_path $S01sng_init ) ..."
-    if ! grep -q $rcfunc_sng $S01sng_init
+    printf "$white %34s" "checking $( strip_path "$S01sng_init" ) ..."
+    if ! grep -q "$rcfunc_sng" "$S01sng_init"
     then
-        sed -i "\~/opt/etc/init.d/rc.func~i . $rcfunc_loc # added by $script_name\n" $S01sng_init
+        sed -i "\~/opt/etc/init.d/rc.func$~i . $rcfunc_loc # added by $script_name\n" "$S01sng_init"
         updated
     else
         present
@@ -492,10 +531,10 @@ syslogd_check()
     printf "$white %34s" "... & agrees with config file ..."
     checksys_loc="$(grep "^SYSLOG_LOC=" "$script_conf" | cut -f2 -d'=')"
     if [ ! -f "$script_conf" ]
-    then # scribe started with no config file
+    then  # scribe started with no config file #
         printf "$red NO CONFIG FILE!\n"
         rd_warn
-    # assumes if $script_conf exists, it is correctly formatted
+    # assumes if $script_conf exists, it is correctly formatted #
     elif [ "$syslog_loc" = "$checksys_loc" ]
     then
         printf "$green okay! $std\n"
@@ -512,8 +551,12 @@ sed_srvcEvent()
     if [ -f "$srvcEvent" ]
     then
         [ "$( grep -c "#!/bin/sh" "$srvcEvent" )" -ne 1 ] && sed -i "1s~^~#!/bin/sh -\n\n~" "$srvcEvent"
-        if grep -q "$script_name kill-logger" "$srvcEvent" ; then sed -i "/$script_name kill-logger/d" "$srvcEvent" ; fi
-        if grep -q "$script_name kill_logger" "$srvcEvent" ; then sed -i "/$script_name kill_logger/d" "$srvcEvent" ; fi
+        if grep -q "$script_name kill-logger" "$srvcEvent"
+        then sed -i "/$script_name kill-logger/d" "$srvcEvent"
+        fi
+        if grep -q "$script_name kill_logger" "$srvcEvent"
+        then sed -i "/$script_name kill_logger/d" "$srvcEvent"
+        fi
         if ! grep -q "$script_name service_event" "$srvcEvent"
         then
             echo "$script_loc service_event \"\$@\" & # added by $script_name" >> "$srvcEvent"
@@ -551,6 +594,7 @@ lr_post()
     else
         present
     fi
+    # Set correct permissions to avoid "world-readable" status #
     [ -f /var/lib/logrotate.status ] && chmod 600 /var/lib/logrotate.status
 }
 
@@ -580,9 +624,9 @@ sed_unMount()
 lr_cron()
 {
     printf "$white %34s" "checking $lr cron job ..."
-    if ! cru l | grep -q $lr
+    if ! cru l | grep -q "$lr"
     then
-        cru a $lr "5 0 * * * $lr_loc $lr_conf >> $lr_daily 2>&1"
+        cru a "$lr" "5 0 * * * $lr_loc $lr_conf >> $lr_daily 2>&1"
         updated
     else
         present
@@ -597,10 +641,10 @@ dir_links()
         #################################################################
         # load kill_logger() function to reset system path links/hacks
         # keep shellcheck from barfing on sourcing $rcfunc_loc
-        # shellcheck disable=SC1090
+        # shellcheck disable=SC1091
         # shellcheck source=/opt/etc/init.d/rc.func.syslog-ng
         #################################################################
-        . $rcfunc_loc
+        . "$rcfunc_loc"
         kill_logger
         updated
     else
@@ -650,23 +694,23 @@ sng_syntax()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Jun-09] ##
+## Modified by Martinski W. [2025-Jul-07] ##
 ##----------------------------------------##
 get_vers()
 {
     # only get scribe from github once #
     script_md5="$( md5_file "$script_loc")"
     dlt "$script_tmp_file"
-    curl -LSs --retry 4 --retry-delay 5 --retry-connrefused "$script_repo_file" -o "$script_tmp_file"
+    curl -LSs --retry 4 --retry-delay 5 --retry-connrefused "$script_repoFile" -o "$script_tmp_file"
     [ ! -e "$script_tmp_file" ] && \
     printf "\n\n$white %s GitHub repository is unavailable! -- $red ABORTING! $std\n\n" "$script_name" && exit 1
-    github_ver="$( grep -m1 "scribe_ver=" "$script_tmp_file" | grep -oE 'v?[0-9]{1,2}([.][0-9]{1,2})([_.][0-9]{1,2})' | sed 's/\./_/2' )"
+    github_ver="$( grep -m1 "scribe_ver=" "$script_tmp_file" | grep -oE "$scribeVerRegExp" )"
     github_branch="$( grep -m1 "scribe_branch=" "$script_tmp_file" | awk -F\" '{ printf ( $2 ); }'; )" 
-    github_long="$github_ver ($github_branch)"
+    githubVer_long="$github_ver ($github_branch)"
     github_md5="$( md5_file "$script_tmp_file")"
     new_vers="none"
-    if [ "$( ver_num "$github_ver" )" -lt "$( ver_num "$scribe_ver" )" ]; then new_vers="older"
-    elif [ "$( ver_num "$github_ver" )" -gt "$( ver_num "$scribe_ver" )" ]; then new_vers="major"
+    if [ "$( VersionStrToNum "$github_ver" )" -lt "$( VersionStrToNum "$scribe_ver" )" ]; then new_vers="older"
+    elif [ "$( VersionStrToNum "$github_ver" )" -gt "$( VersionStrToNum "$scribe_ver" )" ]; then new_vers="major"
     elif [ "$script_md5" != "$github_md5" ]; then new_vers="minor"
     fi
     dlt "$script_tmp_file"
@@ -674,17 +718,17 @@ get_vers()
 
 prt_vers()
 {
-    printf "\n$white %34s$green %s \n" "$script_name installed version:" "$script_long"
-    printf "$white %34s$green %s $std\n" "$script_name GitHub version:" "$github_long"
+    printf "\n$white %34s$green %s \n" "$script_name installed version:" "$scriptVer_long"
+    printf "$white %34s$green %s $std\n" "$script_name GitHub version:" "$githubVer_long"
     case "$new_vers" in
         older)
             printf "$red      Local %s version greater than GitHub version!" "$script_name"
             ;;
         major)
-            printf "$yellow %45s" "New $script_name version available"
+            printf "$yellow %45s" "New version available for $script_name"
             ;;
         minor)
-            printf "$blue %45s" "Minor $script_name update available"
+            printf "$blue %45s" "Minor patch available for $script_name"
             ;;
         none)
             printf "$green %40s" "$script_name is up to date!"
@@ -693,13 +737,13 @@ prt_vers()
     printf "$std\n\n"
 }
 
-# install default file in /usr/etc/$1.d #
+# Install default file in /usr/etc/$1.d #
 setup_ddir()
 {
     [ "$1" = "$sng" ] && d_dir="$sngd_d"
     [ "$1" = "$lr"  ] && d_dir="$lrd_d"
     
-    for dfile in "$unzip_dir/$1.d"/*
+    for dfile in "$unzip_dirPath/${1}.d"/*
     do
         dfbase="$( strip_path "$dfile" )"
         ddfile="$d_dir/$dfbase"
@@ -708,19 +752,19 @@ setup_ddir()
     chmod 600 "$d_dir"/*
 }
 
-# install example files in /usr/share/$1/examples
+# Install example files in /usr/share/$1/examples #
 setup_exmpls()
 {
     [ "$1" = "$sng" ] && share="$sng_share" && conf="$sng_conf"
     [ "$1" = "$lr"  ] && share="$lr_share" && conf="$lr_conf"
-    opkg="$1.conf-opkg"
-    conf_opkg="$conf-opkg"
+    opkg="${1}.conf-opkg"
+    conf_opkg="${conf}-opkg"
 
     [ "$2" != "ALL" ] && printf "\n$white"
     [ ! -d "$share" ] && mkdir "$share"
     [ ! -d "$share/examples" ] && mkdir "$share/examples"
 
-    for exmpl in "$unzip_dir/$1.share"/*
+    for exmpl in "$unzip_dirPath/${1}.share"/*
     do
         shrfile="$share/examples/$( strip_path "$exmpl" )"
         if [ ! -e "$shrfile" ] || [ "$2" = "ALL" ]
@@ -791,7 +835,7 @@ run_logrotate()
 {
     dlt "$lr_daily"
     printf "\n$white %34s" "running $lr ..."
-    $lr_loc $lr_conf >> $lr_daily 2>&1
+    $lr_loc "$lr_conf" >> "$lr_daily" 2>&1
     finished
     printf "\n$magenta checking %s log for errors $cyan\n\n" "$lr"
     tail -v "$lr_daily"
@@ -817,7 +861,7 @@ menu_status()
 sng_ver_chk()
 {
     sng_vers="$( $sng --version | grep -m1 "$sng" | grep -oE '[0-9]{1,2}([_.][0-9]{1,2})([_.][0-9]{1,2})?' )"
-    if [ "$( ver_num "$sng_vers" )" -lt "$( ver_num "$sng_reqd" )" ]
+    if [ "$( VersionStrToNum "$sng_vers" )" -lt "$( VersionStrToNum "$sng_reqd" )" ]
     then
         printf "\n$red %s version %s or higher required!\n" "$sng" "$sng_reqd"
         printf "Please update your Entware packages and run %s install again.$cyan\n\n" "$script_name"
@@ -851,12 +895,17 @@ setup_lr()
     lr_cron
 }
 
-install()
+##----------------------------------------##
+## Modified by Martinski W. [2025-Aug-23] ##
+##----------------------------------------##
+doInstall()
 {
-    force=""
-    [ "X$2" = "XFORCE" ] && force="--force-reinstall"
+    forceOpt=""
+    if [ $# -gt 1 ] && [ "$2" = "FORCE" ]
+    then forceOpt="--force-reinstall"
+    fi
     printf "\n$cyan"
-    /opt/bin/opkg install $force "$1" 
+    /opt/bin/opkg install $forceOpt "$1"
     [ "$1" = "$sng" ] && sng_ver_chk
     setup_ddir "$1" "ALL"
     setup_exmpls "$1" "ALL"
@@ -869,22 +918,22 @@ install()
 ##----------------------------------------##
 setup_Scribe()
 {
-    printf "\n$white setting up %s ..." "$script_name"
-    cp -fp "$unzip_dir/${script_name}.sh" "$script_loc"
+    printf "\n$white setting up %s ...\n" "$script_name"
+    cp -fp "$unzip_dirPath/${script_name}.sh" "$script_loc"
     chmod 0755 "$script_loc"
     [ ! -e "/opt/bin/$script_name" ] && ln -s "$script_loc" /opt/bin
 
-    # install correct firewall or skynet file, these are mutually exclusive #
-    if $skynet_inst
+    # Install correct firewall or skynet file, these are mutually exclusive #
+    if "$skynet_inst"
     then
         dlt "$sngd_d/firewall"
         dlt "$lrd_d/firewall"
         if [ ! -e "$sngd_d/skynet" ] || [ "$1" = "ALL" ]
         then
-            printf "$white installing %s Skynet filter ..." "$sng"
+            printf "$white installing %s Skynet filter ...\n" "$sng"
             cp -p "$sng_share/examples/skynet" "$sngd_d" 
         fi
-        printf "$blue setting Skynet log file location$white ..."
+        printf "$blue setting Skynet log file location$white ...\n"
         skynetlog="$( grep -m1 'file("' $sngd_d/skynet | awk -F\" '{ printf ( $2 ); }'; )"
         sh $skynet settings syslog "$skynetlog" > /dev/null 2>&1
     else
@@ -892,9 +941,9 @@ setup_Scribe()
         dlt "$lrd_d/skynet"
         if [ ! -e "$sngd_d/firewall" ] || [ "$1" = "ALL" ]
         then
-            printf "$white installing %s firewall filter ..." "$sng"
+            printf "$white installing %s firewall filter ...\n" "$sng"
             cp -p "$sng_share/examples/firewall" "$sngd_d"
-            printf "$white installing firewall log rotation ..."
+            printf "$white installing firewall log rotation ...\n"
             cp -p "$lr_share/examples/firewall" "$lrd_d"
         fi
     fi
@@ -904,7 +953,6 @@ setup_Scribe()
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Jun-09] ##
 ##----------------------------------------##
-readonly uiscribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})"
 Install_uiScribe()
 {
     uiscribeVer="$(curl -fsL --retry 4 --retry-delay 5 "$uiscribeRepo" | grep "SCRIPT_VERSION=" | grep -m1 -oE "$uiscribeVerRegExp")"
@@ -925,7 +973,7 @@ Install_uiScribe()
 Uninstall_uiScribe()
 {
     printf "\n"
-    if "$uiscribeInstalled"
+    if "$uiScribeInstalled"
     then
         printf "$white uiScribe add-on is detected, uninstalling ...\n\n"
         $uiscribePath uninstall
@@ -937,10 +985,12 @@ pre_install()
     # check for required components
     okay=true
 
-    # check if Entware & ASUSWRT-Merlin are installed and Merlin version number
-    if [ ! -x "/opt/bin/opkg" ] || [ "$fwname" != "$merlin" ] || [ "$( ver_num "$fwvers" )" -lt "$( ver_num "$fwreqd" )" ]
+    # check if Entware & ASUSWRT-Merlin are installed and Merlin version number #
+    if [ ! -x "/opt/bin/opkg" ]   || \
+       [ "$fwName" != "$wrtMerlin" ] || \
+       [ "$( VersionStrToNum "$fwVerBuild" )" -lt "$( VersionStrToNum "$fwVerReqd" )" ]
     then
-        printf "\n\n$red %s version %s or later with Entware is required! $std\n" "$merlin" "$fwreqd"
+        printf "\n\n$red %s version %s or later with Entware is required! $std\n" "$wrtMerlin" "$fwVerReqd"
         okay=false
     fi
 
@@ -950,7 +1000,7 @@ pre_install()
         printf "\n\n$white Diversion detected, checking version ..."
         div_ver="$( grep -m1 "VERSION" $divers | grep -oE '[0-9]{1,2}([.][0-9]{1,2})' )"
         printf " version %s detected ..." "$div_ver"
-        if [ "$( ver_num "$div_ver" )" -lt "$( ver_num "$div_req" )" ]
+        if [ "$( VersionStrToNum "$div_ver" )" -lt "$( VersionStrToNum "$div_req" )" ]
         then
             printf "$red update required!\n"
             printf " Diversion %s or later is required! $std\n" "$div_req"
@@ -960,13 +1010,13 @@ pre_install()
         fi
     fi
 
-    # check if Skynet is installed and version number
-    if $skynet_inst 
+    # check if Skynet is installed and version number #
+    if "$skynet_inst"
     then
         printf "\n\n$white Skynet detected, checking version ..."
         sky_ver="$( grep -m1 -oE 'v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})' "$skynet" )"
         printf " version %s detected ..." "$sky_ver"
-        if [ "$( ver_num "$sky_ver" )" -lt "$( ver_num "$sky_req" )" ]
+        if [ "$( VersionStrToNum "$sky_ver" )" -lt "$( VersionStrToNum "$sky_req" )" ]
         then
             printf "$red update required!\n"
             printf " Skynet %s or later is required! $std\n" "$sky_req"
@@ -993,7 +1043,7 @@ pre_install()
     fi
 
     # exit if requirements not met #
-    if ! $okay
+    if ! "$okay"
     then
         printf "\n\n$magenta exiting %s installation. $std\n\n" "$script_name"
         dlt "$script_loc"
@@ -1003,27 +1053,27 @@ pre_install()
 
 menu_install()
 {
-        if [ ! -e $sng_loc ]
+        if [ ! -e "$sng_loc" ]
         then
-            install "$sng"
+            doInstall "$sng"
         elif force_install "$sng"
         then
             $S01sng_init stop
-            install "$sng" "FORCE"
+            doInstall "$sng" "FORCE"
         fi
         echo
         $S01sng_init start
 
-        if [ ! -e $lr_loc ]
+        if [ ! -e "$lr_loc" ]
         then
-            install "$lr"
+            doInstall "$lr"
         elif force_install "$lr"
         then
-            install "$lr" "FORCE"
+            doInstall "$lr" "FORCE"
         fi
         run_logrotate
 
-        if ! $is_inst
+        if ! "$scribeInstalled"
         then
             setup_Scribe "ALL"
         elif force_install "$script_name script"
@@ -1034,7 +1084,7 @@ menu_install()
         rld_sngconf
         printf "\n$white %s setup complete!\n\n" "$script_name"
         enter_to "continue"
-        if ! "$uiscribeInstalled" ; then Install_uiScribe ; fi
+        if ! "$uiScribeInstalled" ; then Install_uiScribe ; fi
 }
 
 menu_restart()
@@ -1052,13 +1102,13 @@ menu_restart()
 
 stop_sng()
 {
-    printf "$white stopping %s ..." "$sng"
+    printf "$white stopping %s ...\n" "$sng"
     $S01sng_init stop
-    # remove any syslog links
+    # remove any syslog links #
     clear_loglocs
-    mv "$optmsg" "$syslog_loc"
+    mv -f "$optmsg" "$syslog_loc"
     ln -s "$syslog_loc" "$optmsg"
-    printf "$white starting system klogd and syslogd ..."
+    printf "$white starting system klogd and syslogd ...\n"
     start_syslogd
     if ! $banner; then return; fi
     printf "\n$white %s will be started at next reboot; you\n" "$sng"
@@ -1066,14 +1116,15 @@ stop_sng()
     printf " select rs from %s menu to restart %s $std\n\n" "$script_name" "$sng"
 }
 
-stop_lr(){ if cru l | grep -q $lr; then cru d $lr; fi; }
+stop_lr() { if cru l | grep -q "$lr" ; then cru d "$lr" ; fi ; }
 
-menu_stop(){
+menu_stop()
+{
     stop_sng
     stop_lr
 }
 
-uninstall()
+doUninstall()
 {
     printf "\n\n"
     banner=false  # suppress certain messages #
@@ -1090,7 +1141,7 @@ uninstall()
         dlt "$sngd_d"
         dlt "$sng_share"
 
-        if $skynet_inst && ! $reinst
+        if "$skynet_inst" && ! "$reinst"
         then
             printf "$white restoring Skynet logging to %s ..." "$syslog_loc"
             sh $skynet settings syslog "$syslog_loc" > /dev/null 2>&1
@@ -1113,12 +1164,12 @@ uninstall()
         not_installed "$lr"
     fi
 
+    dlt "$unzip_dirPath"
     dlt "$script_zip_file"
-    dlt "$TMP/${script_name}-$script_branch"
     dlt "/opt/bin/$script_name"
     dlt "$script_loc"
-    is_inst=false
-    if ! $reinst
+    scribeInstalled=false
+    if ! "$reinst"
     then
         printf "\n$white %s, %s, and %s have been removed from the system.\n" "$sng" "$lr" "$script_name"
         printf " It is recommended to reboot the router at this time.  If you do not\n"
@@ -1132,7 +1183,7 @@ menu_uninstall()
 {
     andre="remove"
     uni="UN"
-    if $reinst
+    if "$reinst"
     then
         andre="remove and reinstall"
         uni="RE"
@@ -1147,8 +1198,8 @@ menu_uninstall()
     read -r wipeit
     case "$wipeit" in
         YES)
-            if ! $reinst; then Uninstall_uiScribe; fi
-            uninstall
+            if ! "$reinst" ; then Uninstall_uiScribe ; fi
+            doUninstall
             ;;
         *)
             do_inst=false
@@ -1222,20 +1273,33 @@ menu_filters()
     fi
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2025-Jul-07] ##
+##----------------------------------------##
 menu_update()
 {
-    if [ "$new_vers" = "major" ] || [ "$new_vers" = "minor" ]
+    if [ $# -eq 0 ] || [ -z "$1" ]
     then
-        [ "$new_vers" = "major" ] && printf "\n$green    New version" || printf "$cyan    Minor update"
-        printf "$white available!\n"
-        printf "    Do you wish to upgrade? [y|n] $std"
-    else
-        printf "\n$white    No new version available. (GitHub version"
-        [ "$new_vers" = "none" ] && printf " equal to " || printf "$red LESS THAN $white"
-        printf "local version)\n"
-        printf "    Do you wish to force re-installation of %s script? [y|n] $std" "$script_name"
+        if [ "$new_vers" = "major" ] || [ "$new_vers" = "minor" ]
+        then
+            if [ "$new_vers" = "major" ]
+            then printf "\n$green    New version"
+            else printf "\n$cyan    Minor patch"
+            fi
+            printf "$white available!\n"
+            printf "    Do you wish to upgrade? [y|n]$std  "
+        else
+            printf "\n$white    No new version available. (GitHub version"
+            if [ "$new_vers" = "none" ]
+            then printf " equal to "
+            else printf "$red LESS THAN $white"
+            fi
+            printf "local version)\n"
+            printf "    Do you wish to force re-installation of %s script? [y|n]$std  " "$script_name"
+        fi
     fi
-    if yes_no
+
+    if { [ $# -eq 1 ] && [ "$1" = "force" ] ; } || yes_no
     then
         Get_ZIP_File
         setup_Scribe "NEWER"
@@ -1247,6 +1311,21 @@ menu_update()
     else
         printf "\n$white        *** %s$red not$white updated! *** $std\n\n" "$script_name"
     fi
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2025-Jul-07] ##
+##-------------------------------------##
+Update_Version()
+{
+   if sng_rng
+   then
+       get_vers
+       prt_vers
+       menu_update "$@"
+   else
+       not_recog=true
+   fi
 }
 
 menu_forgrnd()
@@ -1275,36 +1354,43 @@ menu_forgrnd()
     printf "\n"
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2025-Jul-07] ##
+##----------------------------------------##
 gather_debug()
 {
-    dlt "$script_debug"
-    printf "\n$white gathering debugging information ..."
+    local debugTarball="${script_debug}.tar.gz"
+    dlt "$script_debug" "$debugTarball"
+
+    printf "\n$white gathering debugging information...\n"
     get_vers
 
-    # everything between { } goes to $script_debug
     {
         printf "%s\n" "$debug_sep"
-        printf "### %s Version: %s\n" "$script_name" "$script_long"
-        printf "###  Local %s md5: %s\n" "$script_name" "$script_md5"
-        printf "### GitHub Version: %s\n" "$github_long"
-        printf "### GitHub %s md5: %s\n" "$script_name" "$github_md5"
+        printf "### %s\n" "$(date +'%Y-%b-%d %I:%M:%S %p %Z (%a)')"
+        printf "### Scribe Version: %s\n" "$scriptVer_long"
+        printf "### Local Scribe md5:  %s\n" "$script_md5"
+        printf "### GitHub Version: %s\n" "$githubVer_long"
+        printf "### GitHub Scribe md5: %s\n" "$github_md5"
         printf "### Router: %s (%s)\n" "$model" "$arch"
-        printf "### Firmware Version: %s %s\n" "$fwname" "$fwvers"
+        printf "### Firmware Version: %s %s\n" "$fwName" "$fwVersFull"
         printf "\n%s\n### check running log processes:\n" "$debug_sep"
-        ps | grep "log"
+        ps | grep -E "syslog|logrotate" | grep -v 'grep'
         printf "\n%s\n### check crontab:\n" "$debug_sep"
-        cru l | grep $lr
+        cru l | grep "$lr"
         printf "\n%s\n### directory check:\n" "$debug_sep"
         ls -ld /tmp/syslog*
         ls -ld /jffs/syslog*
         ls -ld $optmsg
         ls -ld "$script_conf"
         printf "\n%s\n### top output:\n" "$debug_sep"
-        top -b -n1 | head
-        printf "\n%s\n### *log references in top:\n" "$debug_sep"
-        top -b -n1 | grep log
+        top -b -n1 | head -n 20
+        printf "\n%s\n### log processes in top:\n" "$debug_sep"
+        top -b -n1 | grep -E "syslog|logrotate" | grep -v 'grep'
         printf "\n%s\n### init.d directory:\n" "$debug_sep"
         ls -l /opt/etc/init.d
+        printf "\n%s\n### check logrotate.status \n" "$debug_sep"
+        ls -l /var/lib/logrotate.status
         printf "\n%s\n### contents of S01syslog-ng\n" "$debug_sep"
         cat /opt/etc/init.d/S01syslog-ng
         printf "\n%s\n### /opt/var/log directory:\n" "$debug_sep"
@@ -1313,11 +1399,12 @@ gather_debug()
         /opt/bin/opkg list-installed
         printf "\n%s\n### %s running configuration:\n" "$debug_sep" "$sng"
     } >> "$script_debug"
+
     if sng_rng
     then
         $sngctl_loc config --preprocessed >> "$script_debug"
     else
-        printf "#### %s not running! ####\n%s\n" "$sng" "$debug_sep"
+        printf "#### %s not running! ####\n%s\n" "$sng" "$debug_sep" >> "$script_debug"
     fi
     printf "\n%s\n### %s on-disk syntax check:\n" "$debug_sep" "$sng" >> "$script_debug"
     dlt "$sngconf_merged"
@@ -1336,8 +1423,9 @@ gather_debug()
     fi
     printf "\n%s\n### logrotate debug output:\n" "$debug_sep" >> "$script_debug"
     $lr_loc -d "$lr_conf" >> "$script_debug" 2>&1
-    printf "\n%s\n### Skynet log locations:\n" "$debug_sep"
-    if $skynet_inst
+
+    printf "\n%s\n### Skynet log locations:\n" "$debug_sep" >> "$script_debug"
+    if "$skynet_inst"
     then
         skynetloc="$( grep -ow "skynetloc=.* # Skynet" $fire_start 2>/dev/null | grep -vE "^#" | awk '{print $1}' | cut -c 11- )"
         skynetcfg="${skynetloc}/skynet.cfg"
@@ -1347,39 +1435,41 @@ gather_debug()
     fi
     printf "\n%s\n### end of output ###\n" "$debug_sep" >> "$script_debug"
 
-    printf " redacting username and USB drive names ..."
+    printf " Redacting username and USB drive names...\n"
     redact="$( echo "$USER" | awk  '{ print substr($0, 1, 8); }' )"
     sed -i "s/$redact/redacted/g" "$script_debug"
     mntnum=0
     for usbmnt in /tmp/mnt/*
     do
         usbdrv="$( echo "$usbmnt" | awk -F/ '{ printf( $4 ); }' )"
-        # note that if the usb drive name has a comma in it, then sed will fail
+        # note that if the usb drive name has a comma in it, then sed will fail #
         if [ "X$( echo "$usbmnt" | grep ',' )" = "X" ]
         then
             sed -i "s,$usbdrv,usb#$mntnum,g" "$script_debug"
         else
             printf "\n\n    USB drive $cyan%s$white has a comma in the drive name,$red unable to redact!$white\n\n" "$usbdrv"
         fi
-        mntnum=$(( mntnum + 1 ))
+        mntnum="$(( mntnum + 1 ))"
     done
 
-    printf " taring the output ..."
-    tar -zcvf "$script_debug.tar.gz" -C "$TMP" "$script_debug_name" > /dev/null 2>&1
+    printf " Creating tarball...\n"
+    tar -zcvf "$debugTarball" -C "$TMP" "$script_debug_name" >/dev/null 2>&1
     finished
     printf "\n$std Debug output stored in $cyan%s$std, please review this file\n" "$script_debug"
     printf " to ensure you understand what information is being disclosed.\n\n"
-    printf " Tarball of debug output is $cyan%s.tar.gz $std\n" "$script_debug"
+    printf " Tarball of debug output is ${cyan}%s${std}\n" "$debugTarball"
 }
 
-menu_backup(){
+menu_backup()
+{
     printf "\n$white Backing up %s and %s Configurations ... \n" "$sng" "$lr"
     date_stamp "$script_bakname"
     tar -zcvf "$script_bakname" "$sng_conf" "$sngd_d" "$lr_conf" "$lrd_d" "$conf_d"
     printf "\n$std Backup data is stored in $cyan%s$std.\n\n" "$script_bakname"
 }
 
-menu_restore(){
+menu_restore()
+{
     warning_sign
     printf " This will overwrite $yellow%s$white and $yellow%s$white,\n" "$sng_conf" "$lr_conf"
     printf " and replace all files in $yellow%s$white and $yellow%s$white!!\n" "$sngd_d" "$lrd_d"
@@ -1409,14 +1499,17 @@ menu_restore(){
     fi
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2024-Jul-07] ##
+##----------------------------------------##
 menu_about()
 {
+    printf "About ${magenta}${SCRIPT_VERS_INFO}${std}\n"
     cat <<EOF
-About
-   $script_name replaces the firmware system logging service with
-   syslog-ng (https://github.com/syslog-ng/syslog-ng/releases),
-   which facilitates breaking the monolithic logfile provided by
-   syslog into individualized log files based on user criteria.
+  $script_name replaces the firmware system logging service with
+  syslog-ng (https://github.com/syslog-ng/syslog-ng/releases),
+  which facilitates breaking the monolithic logfile provided by
+  syslog into individualized log files based on user criteria.
 
 License
   $script_name is free to use under the GNU General Public License
@@ -1431,19 +1524,26 @@ EOF
     printf "$std\n"
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2024-Jul-07] ##
+##----------------------------------------##
 menu_help()
 {
+    printf "HELP ${magenta}${SCRIPT_VERS_INFO}${std}\n"
     cat <<EOF
 Available commands:
   $script_name about                explains functionality
   $script_name install              installs script
   $script_name remove / uninstall   uninstalls script
-  $script_name update               checks for updates
+  $script_name update               checks for script updates
+  $script_name forceupdate          updates to latest version (force update)
   $script_name [show-]config        checks on-disk syslog-ng configuration
   $script_name status               displays current scribe status    
   $script_name reload               reload syslog-ng configuration file
   $script_name restart / start      restarts (or starts if not running) syslog-ng
   $script_name debug                creates debug file
+  $script_name develop              switch to development branch version
+  $script_name stable               switch to stable/production branch version
   $script_name help                 displays this help
 EOF
     printf "$std\n"
@@ -1464,7 +1564,7 @@ ut_menu()
     printf "     sd.   Run %s debugging mode\n" "$sng"
     printf "     ld.   Show %s debug info\n\n" "$lr"
     printf "     ui.   "
-    if "$uiscribeInstalled"
+    if "$uiScribeInstalled"
     then printf "Run"
     else printf "Install"
     fi
@@ -1472,6 +1572,9 @@ ut_menu()
     printf "     e.    Exit to Main Menu\n"
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2024-Jul-07] ##
+##----------------------------------------##
 main_menu()
 {
     and_lr=" & $lr cron\n"
@@ -1483,7 +1586,7 @@ main_menu()
         res="S"
         ins="I"
     fi
-    if $is_inst
+    if "$scribeInstalled"
     then
         printf "     s.    Show %s status\n" "$script_name"
         if sng_rng
@@ -1500,8 +1603,9 @@ main_menu()
         fi
         if sng_rng
         then
-            printf "\n     u.    Update scribe\n"
-            printf "     uf.   Update filters\n"
+            printf "\n     u.    Check for script updates\n"
+            printf "     uf.   Force update %s with latest version\n" "$script_name"
+            printf "     ft.   Update filters\n"
         fi
         printf "     su.   %s utilities\n" "$script_name"
     fi
@@ -1511,11 +1615,11 @@ main_menu()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2024-Jun-22] ##
+## Modified by Martinski W. [2024-Jul-07] ##
 ##----------------------------------------##
 scribe_menu()
 {
-	while true
+    while true
     do
         pause=true
         not_recog=false
@@ -1533,7 +1637,11 @@ scribe_menu()
         printf "\n$white $header"
         printf "$magenta Please select an option: $std"
         read -r choice
-        if $is_inst || [ "$choice" = "e" ] || [ "$choice" = "is" ] || [ "$choice" = "zs" ]
+
+        if "$scribeInstalled" || \
+           [ "$choice" = "e" ] || \
+           [ "$choice" = "is" ] || \
+           [ "$choice" = "zs" ]
         then
             case "$choice" in
                 s)
@@ -1563,16 +1671,12 @@ scribe_menu()
                     fi
                     ;;
                 u)
-                    if sng_rng
-                    then
-                        get_vers
-                        prt_vers
-                        menu_update
-                    else
-                        not_recog=true
-                    fi
+                    Update_Version
                     ;;
                 uf)
+                    Update_Version force
+                    ;;
+                ft)
                     if sng_rng
                     then
                         menu_filters
@@ -1616,13 +1720,13 @@ scribe_menu()
                     ;;
                 ld)
                     dlt "$lr_temp"
-                    $lr_loc -d $lr_conf >> $lr_temp 2>&1
+                    $lr_loc -d "$lr_conf" >> "$lr_temp" 2>&1
                     less $lr_temp
                     dlt "$lr_temp"
                     pause=false
                     ;;
                 ui)
-                    if "$uiscribeInstalled"
+                    if "$uiScribeInstalled"
                     then
                         $uiscribePath
                         pause=false
@@ -1643,12 +1747,12 @@ scribe_menu()
                 is)
                     do_inst=true
                     reinst=false
-                    if $is_inst
+                    if "$scribeInstalled"
                     then
                         reinst=true
                         menu_uninstall
                     fi
-                    if $do_inst
+                    if "$do_inst"
                     then
                         pre_install
                         Get_ZIP_File
@@ -1668,7 +1772,7 @@ scribe_menu()
         else
             not_recog=true
         fi
-        if $not_recog
+        if "$not_recog"
         then
             [ -n "$choice" ] && \
             printf "\n${red} INVALID input [$choice]${std}"
@@ -1682,6 +1786,8 @@ scribe_menu()
 ##############
 #### MAIN ####
 ##############
+
+SetUpRepoBranchVars
 
 if ! sld_rng && ! sng_rng
 then
@@ -1701,15 +1807,21 @@ else
     ScriptLogo
 fi
 
+##----------------------------------------##
+## Modified by Martinski W. [2025-Aug-23] ##
+##----------------------------------------##
+cliParamCheck=true
 case "$action" in
     about)
         menu_about
+        cliParamCheck=false
         ;;
     help)
         menu_help
+        cliParamCheck=false
         ;;
     install)
-        if $is_inst
+        if "$scribeInstalled"
         then
             printf "\n$white     *** %s already installed! *** \n\n" "$script_name"
             printf " Please use menu command 'is' to reinstall. ${std}\n\n"
@@ -1721,26 +1833,30 @@ case "$action" in
         sh "$script_loc" status nologo
         exit 0
         ;;
-
-    #uninstall scribe#
     uninstall | remove)
         reinst=false
         menu_uninstall
         ;;
-
-    #update scribe#
     update)
-        if sng_rng
-        then
-            get_vers
-            prt_vers
-            menu_update
-        fi
+        Update_Version
+        ;;
+    forceupdate)
+        Update_Version force
+        ;;
+    develop)
+        script_branch="develop"
+        SetUpRepoBranchVars
+        Update_Version force
+        ;;
+    stable)
+        script_branch="master"
+        SetUpRepoBranchVars
+        Update_Version force
         ;;
 
     #show total combined config#
     show-config | config)
-        if $is_inst
+        if "$scribeInstalled"
         then
             if show_config; then sng_syntax; fi
         fi
@@ -1748,7 +1864,7 @@ case "$action" in
 
     #verify syslog-ng is running and logrotate is listed in 'cru l'#
     status)
-        if $is_inst; then menu_status; fi
+        if "$scribeInstalled" ; then menu_status ; fi
         ;;
 
     #reload syslog-ng configuration#
@@ -1758,7 +1874,7 @@ case "$action" in
 
     #restart (or start if not running) syslog-ng#
     restart | start)
-        if $is_inst
+        if "$scribeInstalled"
         then
             menu_restart
             menu_status
@@ -1772,7 +1888,7 @@ case "$action" in
 
     #generate debug tarball#
     debug)
-        if $is_inst; then gather_debug; fi
+        if "$scribeInstalled" ; then gather_debug ; fi
         ;;
 
     #update syslog-ng and logrotate filters - only used in update process#
@@ -1786,7 +1902,7 @@ case "$action" in
         #################################################################
         # load kill_logger() function to reset system path links/hacks
         # keep shellcheck from barfing on sourcing $rcfunc_loc
-        # shellcheck disable=SC1090
+        # shellcheck disable=SC1091
         # shellcheck source=/opt/etc/init.d/rc.func.syslog-ng
         #################################################################
         currTimeSecs="$(date +'%s')"
@@ -1795,7 +1911,7 @@ case "$action" in
         if [ "$thisTimeDiff" -ge 120 ]  ##Only once every 2 minutes at most##
         then
             _ServiceEventTime_ update "$currTimeSecs"
-            . $rcfunc_loc
+            . "$rcfunc_loc"
             kill_logger
             sync_conf
             _ServiceEventTime_ update "$(date +'%s')"
@@ -1803,23 +1919,21 @@ case "$action" in
             exit 1
         fi
         ;;
-
-    #unrecognized command#
     *)
-        printf "\n$white Usage: $script_name ( about | uninstall | update | config | status | reload | restart | debug )\n"
-        printf " For a brief description of commands, run: $script_name help $std\n\n"
+        printf "\n${red} Parameter [$action] is NOT recognized.${std}\n\n"
+        printf " For a brief description of available commands, run: ${green}$script_name help${std}\n\n"
         exit 1
         ;;
 esac
 
-if ! $is_inst
+if ! "$scribeInstalled" && "$cliParamCheck"
 then
-    printf "\n$yellow %s $white not installed, command \"%s\" not valid!$std\n\n" "$script_name" "$action"
-elif ! sng_rng && [ "$action" != "stop" ]
+    printf "\n${yellow} %s ${white}is NOT installed, command \"%s\" not valid!${std}\n\n" "$script_name" "$action"
+elif ! sng_rng && [ "$action" != "stop" ] && "$cliParamCheck"
 then
-    printf "\n$yellow %s $white not running, command \"%s\" not valid!$std\n\n" "$sng" "$action"
+    printf "\n${yellow} %s ${white}is NOT running, command \"%s\" not valid!${std}\n\n" "$sng" "$action"
 else
-    printf "\n"
+    echo
 fi
 
 #EOF#

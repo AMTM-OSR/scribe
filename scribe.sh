@@ -76,7 +76,7 @@ script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
 readonly scriptVer_TAG="25082322"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
-readonly scriptVer_longer="$scribe_ver (Branch: $scribe_branch)"
+readonly scriptVer_longer="$scribe_ver [Branch: $scribe_branch]"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
 readonly script_zip_file="$TMP/${script_name}_TEMP.zip"
@@ -1808,14 +1808,17 @@ else
 fi
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Jul-07] ##
+## Modified by Martinski W. [2025-Aug-23] ##
 ##----------------------------------------##
+cliParamCheck=true
 case "$action" in
     about)
         menu_about
+        cliParamCheck=false
         ;;
     help)
         menu_help
+        cliParamCheck=false
         ;;
     install)
         if "$scribeInstalled"
@@ -1923,14 +1926,14 @@ case "$action" in
         ;;
 esac
 
-if ! "$scribeInstalled"
+if ! "$scribeInstalled" && "$cliParamCheck"
 then
-    printf "\n$yellow %s $white not installed, command \"%s\" not valid!$std\n\n" "$script_name" "$action"
-elif ! sng_rng && [ "$action" != "stop" ]
+    printf "\n${yellow} %s ${white}is NOT installed, command \"%s\" not valid!${std}\n\n" "$script_name" "$action"
+elif ! sng_rng && [ "$action" != "stop" ] && "$cliParamCheck"
 then
-    printf "\n$yellow %s $white not running, command \"%s\" not valid!$std\n\n" "$sng" "$action"
+    printf "\n${yellow} %s ${white}is NOT running, command \"%s\" not valid!${std}\n\n" "$sng" "$action"
 else
-    printf "\n"
+    echo
 fi
 
 #EOF#

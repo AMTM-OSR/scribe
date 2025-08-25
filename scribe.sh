@@ -418,7 +418,7 @@ ScriptLogo()
     printf "     (____/\`\\____)(_)   (_)(_,__/'\`\\____) \n"
     printf "     %s and %s installation $std\n" "$sng" "$lr"
     printf "           ${green}%-30s${std}\n" "$scriptVer_longer"
-    printf "     ${blue}https://github.com/AMTM-OSR/uiScribe${std}\n"
+    printf "     ${blue}https://github.com/AMTM-OSR/scribe${std}\n"
     printf "          ${blue}Original author: cmkelley${std}\n\n"
 }
 

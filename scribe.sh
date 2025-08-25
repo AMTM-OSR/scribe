@@ -67,7 +67,7 @@ done
 
 # scribe constants #
 readonly script_name="scribe"
-scribe_branch="master"
+scribe_branch="develop"
 script_branch="$scribe_branch"
 # Version number for amtm compatibility #
 readonly scribe_ver="v3.2.3"

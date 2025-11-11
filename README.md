@@ -9,9 +9,9 @@
 
 ### Prerequisites
 
-1. [Asuswrt-Merlin](https://asuswrt.lostrealm.ca/ "Pure Freaking Magic") running on a supported ASUS router
-2. **Entware** installed, preferably using [amtm](https://github.com/decoderman/amtm "amtm")
-3. jffs scripts enabled in the firmware; installing **Entware** should have taken care of this part
+- Asuswrt-Merlin running on a supported ASUS router
+- Entware installed, preferably using [amtm](https://github.com/decoderman/amtm "amtm")
+- jffs scripts enabled in the firmware; this can be set manually, and installing Entware via amtm usually takes care of it
 
 * **scribe** includes handlers for the logs created by [skynet](https://github.com/Adamm00/IPSet_ASUS "skynet"); if you wish to use these handlers, it is advised to install **skynet** first.  If **skynet** is installed after scribe, you will have to re-run the installation and force installation.
 

@@ -26,14 +26,14 @@
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-Aug-23
+# Last Modified: 2025-Nov-21
 #-----------------------------------------------------------------
 
-# ensure firmware binaries are used, not Entware
+# Ensure firmware binaries are used, not Entware #
 export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
 
 # set TMP if not set #
-[ -z "$TMP" ] && export TMP=/opt/tmp
+[ -z "${TMP:+xSETx}" ] && export TMP=/opt/tmp
 
 # parse parameters
 action="X"
@@ -67,14 +67,14 @@ done
 
 # scribe constants #
 readonly script_name="scribe"
-scribe_branch="master"
+scribe_branch="develop"
 script_branch="$scribe_branch"
 # Version number for amtm compatibility #
-readonly scribe_ver="v3.2.3"
+readonly scribe_ver="v3.2.4"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25082322"
+readonly scriptVer_TAG="25112123"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly scriptVer_longer="$scribe_ver [Branch: $scribe_branch]"
 readonly script_author="AMTM-OSR"
@@ -316,19 +316,34 @@ CFG_Write_Syslog_Path()
     fi
 }
 
+#-----------------------------------------------------------
 # random routers point syslogd at /jffs instead of /tmp
 # figure out where default syslog.log location is
 # function assumes syslogd is running!
+#-----------------------------------------------------------
+##----------------------------------------##
+## Modified by Martinski W. [2025-Aug-25] ##
+##----------------------------------------##
 where_syslogd()
 {
-    sld_ps="$( ps ww | grep "syslogd" )"
-    syslog_loc="$( awk -v psww="$sld_ps" 'BEGIN { n=split (psww, psary); for (i = 1; i <= n; i++) if ( psary[i] ~ "-O" ) break; print psary[i+1] }' )"
-    CFG_Write_Syslog_Path "$syslog_loc"
+    local findStr
+    if [ -n "$(pidof syslogd)" ]
+    then
+        findStr="$(ps ww | grep '/syslogd' | grep -oE '\-O .*/syslog.log')"
+        if [ -n "$findStr" ]
+        then
+            syslog_loc="$(echo "$findStr" | awk -F' ' '{print $2}')"
+        fi
+    fi
+    [ -n "$syslog_loc" ] && CFG_Write_Syslog_Path "$syslog_loc"
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2025-Aug-25] ##
+##----------------------------------------##
 create_conf()
 {
-    printf "\n$white Detecting default syslog location "
+    printf "\n$white Detecting default syslog location... "
     if sng_rng
     then
         slg_was_rng=true
@@ -345,13 +360,16 @@ create_conf()
         slg_was_rng=false
     fi
 
-    if ! sld_rng; then start_syslogd; fi
+    if ! sld_rng
+    then start_syslogd
+    fi
     where_syslogd
     if "$slg_was_rng"
     then
         # if syslog-ng was running, kill syslogd and restart
         $S01sng_init start
-    else
+    elif [ -n "$syslog_loc" ] && [ -s "$syslog_loc" ]
+    then
         # prepend /opt/var/messages to syslog & create link
         cat "$syslog_loc" >> "$optmsg" && mv -f "$optmsg" "$syslog_loc"
         ln -s "$syslog_loc" "$optmsg"
@@ -360,14 +378,14 @@ create_conf()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Jul-07] ##
+## Modified by Martinski W. [2025-Aug-25] ##
 ##----------------------------------------##
 read_conf()
 {
-    if [ -f "$script_conf" ]
-    then # assumes if $script_conf exists, it is correctly formatted
+    if [ -s "$script_conf" ] && grep -q "^SYSLOG_LOC=" "$script_conf"
+    then
         syslog_loc="$(grep "^SYSLOG_LOC=" "$script_conf" | cut -f2 -d'=')"
-    else # scribe started with no config file
+    else
         create_conf
     fi
     export syslog_loc
@@ -517,8 +535,13 @@ rd_warn(){
     printf "$yellow Use utility menu (su) option 'rd' to re-detect! $std\n"
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2025-Aug-25] ##
+##----------------------------------------##
 syslogd_check()
 {
+    local checksys_loc=""
+
     printf "$white %34s" "syslog.log default location ..."
     if [ "$syslog_loc" != "$jffslog" ] && [ "$syslog_loc" != "$tmplog" ]
     then
@@ -529,12 +552,15 @@ syslogd_check()
         printf "$green %s $std\n" "$syslog_loc"
     fi
     printf "$white %34s" "... & agrees with config file ..."
-    checksys_loc="$(grep "^SYSLOG_LOC=" "$script_conf" | cut -f2 -d'=')"
-    if [ ! -f "$script_conf" ]
-    then  # scribe started with no config file #
+
+    if [ -s "$script_conf" ] && grep -q "^SYSLOG_LOC=" "$script_conf"
+    then
+        checksys_loc="$(grep "^SYSLOG_LOC=" "$script_conf" | cut -f2 -d'=')"
+    fi
+    if [ -z "$checksys_loc" ]
+    then
         printf "$red NO CONFIG FILE!\n"
         rd_warn
-    # assumes if $script_conf exists, it is correctly formatted #
     elif [ "$syslog_loc" = "$checksys_loc" ]
     then
         printf "$green okay! $std\n"
@@ -1355,7 +1381,7 @@ menu_forgrnd()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Jul-07] ##
+## Modified by Martinski W. [2025-Aug-24] ##
 ##----------------------------------------##
 gather_debug()
 {
@@ -1438,18 +1464,18 @@ gather_debug()
     printf " Redacting username and USB drive names...\n"
     redact="$( echo "$USER" | awk  '{ print substr($0, 1, 8); }' )"
     sed -i "s/$redact/redacted/g" "$script_debug"
-    mntnum=0
-    for usbmnt in /tmp/mnt/*
+    mntNum=0
+    for usbMount in /tmp/mnt/*
     do
-        usbdrv="$( echo "$usbmnt" | awk -F/ '{ printf( $4 ); }' )"
+        usbDrive="$(basename "$usbMount")"
         # note that if the usb drive name has a comma in it, then sed will fail #
-        if [ "X$( echo "$usbmnt" | grep ',' )" = "X" ]
+        if [ -z "$(echo "$usbDrive" | grep ',')" ]
         then
-            sed -i "s,$usbdrv,usb#$mntnum,g" "$script_debug"
+            sed -i "s,${usbDrive},usb#${mntNum},g" "$script_debug"
         else
-            printf "\n\n    USB drive $cyan%s$white has a comma in the drive name,$red unable to redact!$white\n\n" "$usbdrv"
+            printf "\n\n    USB drive $cyan%s$white has a comma in the drive name,$red unable to redact!$white\n\n" "$usbDrive"
         fi
-        mntnum="$(( mntnum + 1 ))"
+        mntNum="$((mntNum + 1))"
     done
 
     printf " Creating tarball...\n"
@@ -1554,9 +1580,9 @@ ut_menu()
     printf "$magenta           %s Utilities ${std}\n\n" "$script_name"
     printf "     bu.   Backup configuration files\n"
     printf "     rt.   Restore configuration files\n\n"
-    printf "     d.    Generate debug file\n"
+    printf "      d.   Generate debug file\n"
     printf "     rd.   Re-detect syslog.log location\n"
-    printf "     c.    Check on-disk %s config\n" "$sng"
+    printf "      c.   Check on-disk %s config\n" "$sng"
     if sng_rng
     then
         printf "     lc.   Show loaded %s config\n" "$sng"
@@ -1569,7 +1595,7 @@ ut_menu()
     else printf "Install"
     fi
     printf " %s\n" "$uiscribeName"
-    printf "     e.    Exit to Main Menu\n"
+    printf "      e.   Exit to Main Menu\n"
 }
 
 ##----------------------------------------##
@@ -1588,7 +1614,7 @@ main_menu()
     fi
     if "$scribeInstalled"
     then
-        printf "     s.    Show %s status\n" "$script_name"
+        printf "      s.   Show %s status\n" "$script_name"
         if sng_rng
         then
             printf "     rl.   Reload %s.conf\n" "$sng"
@@ -1603,13 +1629,14 @@ main_menu()
         fi
         if sng_rng
         then
-            printf "\n     u.    Check for script updates\n"
+            echo
+            printf "      u.   Check for script updates\n"
             printf "     uf.   Force update %s with latest version\n" "$script_name"
             printf "     ft.   Update filters\n"
         fi
         printf "     su.   %s utilities\n" "$script_name"
     fi
-    printf "     e.    Exit %s\n\n" "$script_name"
+    printf "      e.   Exit %s\n\n" "$script_name"
     printf "     is.   %snstall %s\n" "$ins" "$script_name" 
     printf "     zs.   Remove %s\n" "$script_name"
 }

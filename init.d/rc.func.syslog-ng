@@ -1,31 +1,35 @@
 #!/bin/sh -
 #
 # NB: rc.func only runs PRECMD on "start"
-# Last Modified: 2025-Aug-25
-# VERSION="3.0.0"
+# Last Modified: 2025-Nov-21
+# VERSION="3.1.0"
 #-------------------------------------------
 
-# Built-in native commands ##
-psCmd="/bin/ps"
-awkCmd="/usr/bin/awk"
-cutCmd="/usr/bin/cut"
-grepCmd="/bin/grep"
-pidofCmd="/bin/pidof"
+## Run the F/W built-in native commands ##
+psCmd="$(which -a ps | grep -v '^/opt/')"
+awkCmd="$(which -a awk | grep -v '^/opt/')"
+cutCmd="$(which -a cut | grep -v '^/opt/')"
+grepCmd="$(which -a grep | grep -v '^/opt/')"
+pidofCmd="$(which -a pidof | grep -v '^/opt/')"
+loggerCmd="$(which -a logger | grep -v '^/opt/')"
+
+readonly logTagStr="Kill_Logger_[$$]"
+readonly logPrioNum="-p 4"
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Aug-25] ##
+## Modified by Martinski W. [2025-Nov-21] ##
 ##----------------------------------------##
 kill_logger()
 {
     # these will be set if coming from scribe; on bootup, these will not be set #
-    [ -z "$script_conf" ] && script_conf="/jffs/addons/scribe.d/config"
-    [ -z "$optmsg" ] && optmsg="/opt/var/log/messages"
-    [ -z "$jffslog" ] && jffslog="/jffs/syslog.log"
     [ -z "$tmplog" ] && tmplog="/tmp/syslog.log"
+    [ -z "$jffslog" ] && jffslog="/jffs/syslog.log"
+    [ -z "$optmsg" ] && optmsg="/opt/var/log/messages"
+    [ -z "$script_conf" ] && script_conf="/jffs/addons/scribe.d/config"
     isjffs=false
 
     # figure out where syslogd expects log file to live #
-    if [ -z "$syslog_loc" ] # don't look for config file if $syslog_loc is defined #
+    if [ -z "$syslog_loc" ]  # don't look for config file if $syslog_loc is defined #
     then
         if [ -s "$script_conf" ] && $grepCmd -q "^SYSLOG_LOC=" "$script_conf"
         then
@@ -46,6 +50,10 @@ kill_logger()
         fi
     fi
 
+    $loggerCmd -t "$logTagStr" $logPrioNum "optmsg=[$optmsg]"
+    $loggerCmd -t "$logTagStr" $logPrioNum "syslog_loc=[$syslog_loc]"
+    $loggerCmd -t "$logTagStr" $logPrioNum "script_conf=[$script_conf]"
+
     [ "$syslog_loc" = "$jffslog" ] && isjffs=true
 
     # kill any/all running klogd and/or syslogd #
@@ -56,7 +64,7 @@ kill_logger()
     do
         [ -n "$( $pidofCmd klogd )" ] && killall klogd
         [ -n "$( $pidofCmd syslogd )" ] && killall syslogd
-        sleep 1 # give them a moment to shut down / unknown process to restart them #
+        sleep 2  # give them a moment to shut down / unknown process to restart them #
         [ -z "$( $pidofCmd klogd )" ] && klgk=true
         [ -z "$( $pidofCmd syslogd )" ] && sldk=true
         if "$klgk" && "$sldk" ; then count=-1 ; fi
@@ -64,11 +72,11 @@ kill_logger()
     done
     [ "$count" -eq 0 ] && exit 1
 
-    # if syslog-ng was stopped by scribe, /opt/var/log/messages will symlink to $syslog_loc
+    # if syslog-ng was stopped by scribe, /opt/var/log/messages will symlink to $syslog_loc #
     [ -L "$optmsg" ] && /bin/rm -f "$optmsg"
 
-    # if syslogd was running, $syslog_loc will exist and be a regular file (not a link)
-    # this might be bootup, or starting scribe 
+    # if syslogd was running, $syslog_loc will exist and be a regular file (not a link) #
+    # this might be during bootup, or when starting scribe #
     if [ ! -L "$syslog_loc" ]
     then
         /bin/cat "$syslog_loc" >> "$optmsg"
@@ -77,22 +85,22 @@ kill_logger()
         echo "### Top of Log File ###" >> "${syslog_loc}-1"
     fi
 
-    # make /jffs/syslog.log and log-1 directories if default syslog location is not at /jffs
-    # prevents system log saver from writing to jffs (not strictly neecessary on newer routers)
+    # make /jffs/syslog.log and log-1 directories if default syslog location is not at /jffs #
+    # prevents system log saver from writing to jffs (not strictly necessary on newer routers) #
     if ! "$isjffs" && [ ! -d "$jffslog" ]
     then
         /bin/rm -rf "$jffslog" "$jffslog-1"
         /bin/mkdir "$jffslog" "$jffslog-1"
     elif "$isjffs"
     then
-        # if syslogd is writing to /jffs, then ensure logfiles in /tmp
-        # are properly linked in case something goes looking there
+        # if syslogd is writing to /jffs, then ensure logfiles in /tmp #
+        # are properly linked in case something goes looking there #
         [ ! -L "$tmplog" ] && /bin/ln -s "$optmsg" "$tmplog"
         [ ! -L "$tmplog-1" ] && /bin/ln -s "${syslog_loc}-1" "${tmplog}-1"
     fi
 
     # create /opt/var/run/syslog-ng/ directory if it doesn't exist #
-    # not needed for older versions of syslog-ng, but doesn't hurt anything
+    # not needed for older versions of syslog-ng, but doesn't hurt anything #
     [ ! -d "/opt/var/run/syslog-ng" ] && mkdir "/opt/var/run/syslog-ng"
 
     # touch logrotate.status if it doesn't exist so syslog-ng doesn't whine #

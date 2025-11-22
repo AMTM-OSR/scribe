@@ -26,7 +26,7 @@
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-Nov-21
+# Last Modified: 2025-Nov-22
 #-----------------------------------------------------------------
 
 # Ensure firmware binaries are used, not Entware #
@@ -70,11 +70,11 @@ readonly script_name="scribe"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 # Version number for amtm compatibility #
-readonly scribe_ver="v3.2.4"
+readonly scribe_ver="v3.2.5"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25112123"
+readonly scriptVer_TAG="25112206"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly scriptVer_longer="$scribe_ver [Branch: $scribe_branch]"
 readonly script_author="AMTM-OSR"
@@ -873,10 +873,14 @@ menu_status()
     syslogd_check
     printf "\n$magenta checking system for necessary %s hooks ...\n\n" "$script_name"
     sed_sng
-    if sng_rng; then sed_srvcEvent; fi
+    if sng_rng
+    then sed_srvcEvent
+    fi
     lr_post
     sed_unMount
-    if sng_rng; then lr_cron; dir_links; fi
+    if sng_rng
+    then lr_cron; dir_links
+    fi
     printf "\n$magenta checking %s configuration ...\n\n" "$sng"
     sync_conf
     sng_syntax
@@ -1835,7 +1839,7 @@ else
 fi
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Aug-23] ##
+## Modified by Martinski W. [2025-Nov-22] ##
 ##----------------------------------------##
 cliParamCheck=true
 case "$action" in
@@ -1891,12 +1895,16 @@ case "$action" in
 
     #verify syslog-ng is running and logrotate is listed in 'cru l'#
     status)
-        if "$scribeInstalled" ; then menu_status ; fi
+        if "$scribeInstalled"
+        then menu_status
+        fi
         ;;
 
     #reload syslog-ng configuration#
     reload)
-        if sng_rng; then rld_sngconf; fi
+        if sng_rng
+        then rld_sngconf
+        fi
         ;;
 
     #restart (or start if not running) syslog-ng#
@@ -1923,9 +1931,11 @@ case "$action" in
         if sng_rng; then menu_filters; fi
         ;;
 
-    #kill syslogd & klogd - only available via cli#
+    #kill syslogd & klogd - only available via CLI#
     service_event)
-        if ! sng_rng || [ "$2" = "stop" ]; then exit 0; fi
+        if ! sng_rng || [ "$2" = "stop" ]
+        then exit 0
+        fi
         #################################################################
         # load kill_logger() function to reset system path links/hacks
         # keep shellcheck from barfing on sourcing $rcfunc_loc
@@ -1935,11 +1945,13 @@ case "$action" in
         currTimeSecs="$(date +'%s')"
         lastTimeSecs="$(_ServiceEventTime_ check)"
         thisTimeDiff="$(echo "$currTimeSecs $lastTimeSecs" | awk -F ' ' '{printf("%s", $1 - $2);}')"
-        if [ "$thisTimeDiff" -ge 120 ]  ##Only once every 2 minutes at most##
+        
+        #Only once every 10 minutes at most#
+        if [ "$thisTimeDiff" -ge 600 ]
         then
             _ServiceEventTime_ update "$currTimeSecs"
             . "$rcfunc_loc"
-            kill_logger
+            kill_logger false
             sync_conf
             _ServiceEventTime_ update "$(date +'%s')"
         else

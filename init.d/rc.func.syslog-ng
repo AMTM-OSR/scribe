@@ -13,7 +13,7 @@ grepCmd="$(which -a grep | grep -v '^/opt/')"
 pidofCmd="$(which -a pidof | grep -v '^/opt/')"
 loggerCmd="$(which -a logger | grep -v '^/opt/')"
 
-readonly logTagStr="Kill_Logger_[$$]"
+readonly logTagStr="Scribe:kill_logger[$$]"
 readonly logPrioNum="-p 4"
 
 ##----------------------------------------##

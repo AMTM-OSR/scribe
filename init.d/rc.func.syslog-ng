@@ -2,7 +2,7 @@
 #
 # NB: rc.func only runs PRECMD on "start"
 # Last Modified: 2025-Nov-22
-# VERSION="3.1.0"
+# VERSION="3.1.1"
 #-------------------------------------------
 
 ## Run the F/W built-in native commands ##
@@ -49,9 +49,12 @@ kill_logger()
         fi
     fi
 
-    $loggerCmd -t "$logTagStr" $logPrioNum "optmsg=[$optmsg]"
-    $loggerCmd -t "$logTagStr" $logPrioNum "syslog_loc=[$syslog_loc]"
-    $loggerCmd -t "$logTagStr" $logPrioNum "script_conf=[$script_conf]"
+    if [ $# -eq 0 ] || [ -z "$1" ]
+    then
+        $loggerCmd -t "$logTagStr" $logPrioNum "optmsg=[$optmsg]"
+        $loggerCmd -t "$logTagStr" $logPrioNum "syslog_loc=[$syslog_loc]"
+        $loggerCmd -t "$logTagStr" $logPrioNum "script_conf=[$script_conf]"
+    fi
 
     [ "$syslog_loc" = "$jffslog" ] && isjffs=true
 

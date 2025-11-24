@@ -26,7 +26,7 @@
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-Nov-21
+# Last Modified: 2025-Nov-23
 #-----------------------------------------------------------------
 
 # Ensure firmware binaries are used, not Entware #
@@ -70,13 +70,12 @@ readonly script_name="scribe"
 scribe_branch="master"
 script_branch="$scribe_branch"
 # Version number for amtm compatibility #
-readonly scribe_ver="v3.2.4"
+readonly scribe_ver="v3.2.5"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25112123"
+readonly scriptVer_TAG="25112322"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
-readonly scriptVer_longer="$scribe_ver [Branch: $scribe_branch]"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
 readonly script_zip_file="$TMP/${script_name}_TEMP.zip"
@@ -88,20 +87,21 @@ readonly script_conf="$conf_d/config"
 readonly optmsg="/opt/var/log/messages"
 readonly jffslog="/jffs/syslog.log"
 readonly tmplog="/tmp/syslog.log"
-export script_conf
 export optmsg
-export jffslog
 export tmplog
+export jffslog
+export script_conf
 
 ##-------------------------------------##
 ## Added by Martinski W. [2025-Jul-07] ##
 ##-------------------------------------##
+readonly branchxStr_TAG="[Branch: $scribe_branch]"
+readonly versionDev_TAG="${scribe_ver}_${scriptVer_TAG}"
 readonly scribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([_.][0-9]{1,2})"
-readonly version_TAG="${scribe_ver}_${scriptVer_TAG}"
 
 if [ "$script_branch" = "master" ]
 then SCRIPT_VERS_INFO=""
-else SCRIPT_VERS_INFO="[$version_TAG]"
+else SCRIPT_VERS_INFO="[$versionDev_TAG]"
 fi
 
 ##----------------------------------------##
@@ -348,7 +348,7 @@ create_conf()
     then
         slg_was_rng=true
         printf "\n Briefly shutting down %s" "$sng"
-        killall $sng 2>/dev/null
+        killall -q $sng 2>/dev/null
         count=10
         while sng_rng && [ "$count" -gt 0 ]
         do
@@ -421,13 +421,42 @@ yes_no()
     esac
 }
 
+##-------------------------------------##
+## Added by Martinski W. [2025-Nov-23] ##
+##-------------------------------------##
+_CenterTextStr_()
+{
+    if [ $# -lt 2 ] || [ -z "$1" ] || [ -z "$2" ] || \
+       ! echo "$2" | grep -qE "^[1-9][0-9]+$"
+    then return 1
+    fi
+    local stringLen="${#1}"
+    local space1Len="$((($2 - stringLen)/2))"
+    local space2Len="$space1Len"
+    local totalLen="$((space1Len + stringLen + space2Len))"
+
+    if [ "$totalLen" -lt "$2" ]
+    then space2Len="$((space2Len + 1))"
+    elif [ "$totalLen" -gt "$2" ]
+    then space1Len="$((space1Len - 1))"
+    fi
+    if [ "$space1Len" -gt 0 ]
+    then spaceLenX="$space1Len"
+    fi
+}
+
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Jun-09] ##
 ##----------------------------------------##
 ScriptLogo()
 {
-    if ! $banner; then return; fi
-    clear 
+    if ! $banner
+    then return 0
+    fi
+    local spaceLenT=45  spaceLenX=5  colorCT
+    _CenterTextStr_ "$scribe_ver $branchxStr_TAG" "$spaceLenT"
+    [ "$script_branch" = "master" ] && colorCT="$green" || colorCT="$magenta"
+    clear
     printf "$white                            _\n"
     printf "                         _ ( )            \n"
     printf "       ___    ___  _ __ (_)| |_      __   \n"
@@ -435,7 +464,7 @@ ScriptLogo()
     printf "     \\__, \\( (___ | |   | || |_) )(  ___/ \n"
     printf "     (____/\`\\____)(_)   (_)(_,__/'\`\\____) \n"
     printf "     %s and %s installation $std\n" "$sng" "$lr"
-    printf "           ${green}%-30s${std}\n" "$scriptVer_longer"
+    printf "%*s${green}%s${std} ${colorCT}%s${std}\n" "$spaceLenX" '' "$scribe_ver" "$branchxStr_TAG"
     printf "     ${blue}https://github.com/AMTM-OSR/scribe${std}\n"
     printf "          ${blue}Original author: cmkelley${std}\n\n"
 }
@@ -873,10 +902,14 @@ menu_status()
     syslogd_check
     printf "\n$magenta checking system for necessary %s hooks ...\n\n" "$script_name"
     sed_sng
-    if sng_rng; then sed_srvcEvent; fi
+    if sng_rng
+    then sed_srvcEvent
+    fi
     lr_post
     sed_unMount
-    if sng_rng; then lr_cron; dir_links; fi
+    if sng_rng
+    then lr_cron; dir_links
+    fi
     printf "\n$magenta checking %s configuration ...\n\n" "$sng"
     sync_conf
     sng_syntax
@@ -1404,10 +1437,10 @@ gather_debug()
         ps | grep -E "syslog|logrotate" | grep -v 'grep'
         printf "\n%s\n### check crontab:\n" "$debug_sep"
         cru l | grep "$lr"
-        printf "\n%s\n### directory check:\n" "$debug_sep"
+        printf "\n%s\n### directory checks:\n" "$debug_sep"
         ls -ld /tmp/syslog*
         ls -ld /jffs/syslog*
-        ls -ld $optmsg
+        ls -ld "$optmsg"
         ls -ld "$script_conf"
         printf "\n%s\n### top output:\n" "$debug_sep"
         top -b -n1 | head -n 20
@@ -1835,7 +1868,7 @@ else
 fi
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Aug-23] ##
+## Modified by Martinski W. [2025-Nov-22] ##
 ##----------------------------------------##
 cliParamCheck=true
 case "$action" in
@@ -1891,12 +1924,16 @@ case "$action" in
 
     #verify syslog-ng is running and logrotate is listed in 'cru l'#
     status)
-        if "$scribeInstalled" ; then menu_status ; fi
+        if "$scribeInstalled"
+        then menu_status
+        fi
         ;;
 
     #reload syslog-ng configuration#
     reload)
-        if sng_rng; then rld_sngconf; fi
+        if sng_rng
+        then rld_sngconf
+        fi
         ;;
 
     #restart (or start if not running) syslog-ng#
@@ -1910,22 +1947,30 @@ case "$action" in
 
     #stop syslog-ng & logrotate cron job#
     stop)
-        if sng_rng; then menu_stop; fi
+        if sng_rng
+        then menu_stop
+        fi
         ;;
 
     #generate debug tarball#
     debug)
-        if "$scribeInstalled" ; then gather_debug ; fi
+        if "$scribeInstalled"
+        then gather_debug
+        fi
         ;;
 
     #update syslog-ng and logrotate filters - only used in update process#
     filters)
-        if sng_rng; then menu_filters; fi
+        if sng_rng
+        then menu_filters
+        fi
         ;;
 
-    #kill syslogd & klogd - only available via cli#
+    #kill syslogd & klogd - only available via CLI#
     service_event)
-        if ! sng_rng || [ "$2" = "stop" ]; then exit 0; fi
+        if ! sng_rng || [ "$2" = "stop" ]
+        then exit 0
+        fi
         #################################################################
         # load kill_logger() function to reset system path links/hacks
         # keep shellcheck from barfing on sourcing $rcfunc_loc
@@ -1935,11 +1980,13 @@ case "$action" in
         currTimeSecs="$(date +'%s')"
         lastTimeSecs="$(_ServiceEventTime_ check)"
         thisTimeDiff="$(echo "$currTimeSecs $lastTimeSecs" | awk -F ' ' '{printf("%s", $1 - $2);}')"
-        if [ "$thisTimeDiff" -ge 120 ]  ##Only once every 2 minutes at most##
+        
+        #Only once every 10 minutes at most#
+        if [ "$thisTimeDiff" -ge 600 ]
         then
             _ServiceEventTime_ update "$currTimeSecs"
             . "$rcfunc_loc"
-            kill_logger
+            kill_logger false
             sync_conf
             _ServiceEventTime_ update "$(date +'%s')"
         else

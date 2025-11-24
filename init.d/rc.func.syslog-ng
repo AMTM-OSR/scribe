@@ -1,8 +1,8 @@
 #!/bin/sh -
 #
 # NB: rc.func only runs PRECMD on "start"
-# Last Modified: 2025-Nov-22
-# VERSION="3.1.0"
+# Last Modified: 2025-Nov-23
+# VERSION="3.1.2"
 #-------------------------------------------
 
 ## Run the F/W built-in native commands ##
@@ -27,6 +27,11 @@ kill_logger()
     [ -z "$script_conf" ] && script_conf="/jffs/addons/scribe.d/config"
     isjffs=false
 
+    if [ $# -eq 0 ] || [ -z "$1" ]
+    then postLogMsgs=true
+    else postLogMsgs=false
+    fi
+
     # figure out where syslogd expects log file to live #
     if [ -z "$syslog_loc" ]  # don't look for config file if $syslog_loc is defined #
     then
@@ -49,9 +54,12 @@ kill_logger()
         fi
     fi
 
-    $loggerCmd -t "$logTagStr" $logPrioNum "optmsg=[$optmsg]"
-    $loggerCmd -t "$logTagStr" $logPrioNum "syslog_loc=[$syslog_loc]"
-    $loggerCmd -t "$logTagStr" $logPrioNum "script_conf=[$script_conf]"
+    if "$postLogMsgs"
+    then
+        $loggerCmd -t "$logTagStr" $logPrioNum "optmsg=[$optmsg]"
+        $loggerCmd -t "$logTagStr" $logPrioNum "syslog_loc=[$syslog_loc]"
+        $loggerCmd -t "$logTagStr" $logPrioNum "script_conf=[$script_conf]"
+    fi
 
     [ "$syslog_loc" = "$jffslog" ] && isjffs=true
 
@@ -61,8 +69,8 @@ kill_logger()
     sldk=false
     while [ "$count" -gt 0 ]
     do
-        [ -n "$( $pidofCmd klogd )" ] && killall klogd
-        [ -n "$( $pidofCmd syslogd )" ] && killall syslogd
+        [ -n "$( $pidofCmd klogd )" ] && killall -q klogd
+        [ -n "$( $pidofCmd syslogd )" ] && killall -q syslogd
         sleep 2  # give them a moment to shut down / unknown process to restart them #
         [ -z "$( $pidofCmd klogd )" ] && klgk=true
         [ -z "$( $pidofCmd syslogd )" ] && sldk=true
@@ -71,10 +79,10 @@ kill_logger()
     done
     [ "$count" -eq 0 ] && exit 1
 
-    # if syslog-ng was stopped by scribe, /opt/var/log/messages will symlink to $syslog_loc #
+    # if syslog-ng was stopped by Scribe, /opt/var/log/messages will symlink to '$syslog_loc' #
     [ -L "$optmsg" ] && /bin/rm -f "$optmsg"
 
-    # if syslogd was running, $syslog_loc will exist and be a regular file (not a link) #
+    # if syslogd was running, '$syslog_loc' will exist and be a regular file (NOT a link) #
     # this might be during bootup, or when starting scribe #
     if [ ! -L "$syslog_loc" ]
     then
@@ -98,11 +106,18 @@ kill_logger()
         [ ! -L "$tmplog-1" ] && /bin/ln -s "${syslog_loc}-1" "${tmplog}-1"
     fi
 
+    if "$postLogMsgs"
+    then
+        $loggerCmd -t "$logTagStr" $logPrioNum "optmsg=[$(ls -ld "$optmsg")]"
+        $loggerCmd -t "$logTagStr" $logPrioNum "syslog_loc=[$(ls -ld "$syslog_loc")]"
+        $loggerCmd -t "$logTagStr" $logPrioNum "script_conf=[$(ls -ld "$script_conf")]"
+    fi
+
     # create /opt/var/run/syslog-ng/ directory if it doesn't exist #
     # not needed for older versions of syslog-ng, but doesn't hurt anything #
     [ ! -d "/opt/var/run/syslog-ng" ] && mkdir "/opt/var/run/syslog-ng"
 
-    # touch logrotate.status if it doesn't exist so syslog-ng doesn't whine #
+    # touch 'logrotate.status' if it doesn't exist so syslog-ng doesn't whine #
     [ ! -f /var/lib/logrotate.status ] && touch /var/lib/logrotate.status
 
     ##----------------------------------------##

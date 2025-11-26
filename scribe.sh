@@ -26,7 +26,7 @@
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-Nov-23
+# Last Modified: 2025-Nov-25
 #-----------------------------------------------------------------
 
 # Ensure firmware binaries are used, not Entware #
@@ -67,14 +67,14 @@ done
 
 # scribe constants #
 readonly script_name="scribe"
-scribe_branch="master"
+scribe_branch="develop"
 script_branch="$scribe_branch"
 # Version number for amtm compatibility #
-readonly scribe_ver="v3.2.5"
+readonly scribe_ver="v3.2.6"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25112322"
+readonly scriptVer_TAG="25112522"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
@@ -164,7 +164,7 @@ readonly div_req="4.1"
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Jul-07] ##
 ##----------------------------------------##
-# uiScribe constants #
+# uiScribe add-on constants #
 readonly uiscribeName="uiScribe"
 readonly uiscribeAuthor="AMTM-OSR"
 readonly uiscribeBranch="master"
@@ -504,7 +504,7 @@ Hup_uiScribe()
 {
     if "$uiScribeInstalled"
     then
-        printf "$white Restarting uiScribe ...\n"
+        printf "$white Restarting $uiscribeName ...\n"
         $uiscribePath startup
     fi
 }
@@ -1034,7 +1034,7 @@ Uninstall_uiScribe()
     printf "\n"
     if "$uiScribeInstalled"
     then
-        printf "$white uiScribe add-on is detected, uninstalling ...\n\n"
+        printf "$white $uiscribeName add-on is detected, uninstalling ...\n\n"
         $uiscribePath uninstall
     fi
 }
@@ -1868,7 +1868,7 @@ else
 fi
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Nov-22] ##
+## Modified by Martinski W. [2025-Nov-25] ##
 ##----------------------------------------##
 cliParamCheck=true
 case "$action" in
@@ -1968,7 +1968,8 @@ case "$action" in
 
     #kill syslogd & klogd - only available via CLI#
     service_event)
-        if ! sng_rng || [ "$2" = "stop" ]
+        if ! sng_rng || [ "$2" = "stop" ] || \
+           echo "$3" | grep -qE "^$uiscribeName"
         then exit 0
         fi
         #################################################################

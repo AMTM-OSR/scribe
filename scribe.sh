@@ -26,7 +26,7 @@
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-Nov-25
+# Last Modified: 2025-Nov-26
 #-----------------------------------------------------------------
 
 # Ensure firmware binaries are used, not Entware #
@@ -74,7 +74,7 @@ readonly scribe_ver="v3.2.6"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25112522"
+readonly scriptVer_TAG="25112622"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
@@ -1856,8 +1856,11 @@ then
     start_syslogd
 fi
 
-# read or create config file #
-read_conf
+if [ "$action" != "help" ]
+then
+    # read or create config file #
+    read_conf
+fi
 
 if [ "$action" = "menu" ]
 then

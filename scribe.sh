@@ -26,7 +26,7 @@
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 ##################################################################
-# Last Modified: 2025-Nov-30
+# Last Modified: 2025-Dec-02
 #-----------------------------------------------------------------
 
 # Ensure firmware binaries are used, not Entware #
@@ -74,7 +74,7 @@ readonly scribe_ver="v3.2.6"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25113020"
+readonly scriptVer_TAG="25120222"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
@@ -824,10 +824,10 @@ menu_LogRotate_CronJob_Time()
         ScriptLogo
         printf "$white $header"
         cronHourNum="$(_Config_Option_Get_ LR_CRONJOB_HOUR)"
-        printf "${BOLD}Current $lr cron job interval: "
+        printf " ${BOLD}Current $lr cron job interval: "
         printf "${green}Every ${cronHourNum} hours${CLRD}\n"
-        printf "\n${BOLD}Please enter how often in HOURS to run the cron job.\n"
-        printf "Every N hours, where N is ${green}${validHourLstStr}${CLRD} "
+        printf "\n ${BOLD}Please enter how often in HOURS to run the cron job."
+        printf "\n Every N hours, where N is ${green}${validHourLstStr}${CLRD} "
         printf "(${green}e${CLRD}=Exit):  "
         read -r hourInput
 
@@ -837,7 +837,7 @@ menu_LogRotate_CronJob_Time()
         elif [ -z "$hourInput" ] || \
              ! echo "$hourInput" | grep -qE "^${validHourRegExp}$"
         then
-            printf "\n${red}Please enter a valid number:${CLRD} "
+            printf "\n ${red}Please enter a valid number:${CLRD} "
             printf "${green}${validHourLstStr}${CLRD}\n\n"
             PressEnterTo "continue"
         elif [ "$hourInput" -eq 24 ]

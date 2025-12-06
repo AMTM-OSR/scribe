@@ -1,0 +1,28 @@
+#------------------------------------------------------------------#
+# These default global settings will override the defaults found
+# in the top-level configuration file (/opt/etc/logrotate.conf).
+# The global settings will also be applied to every log file for 
+# which no corresponding logrotate configuration file is found.
+#-----------------------------
+# Last Modified: 2025-Dec-05
+#------------------------------------------------------------------#
+
+weekly
+minsize 512k
+maxsize 4096k
+rotate 4
+compress
+delaycompress
+create
+dateext
+dateformat -%Y%m%d%H%M
+missingok
+notifempty
+sharedscripts
+
+# THIS OPTION MUST BE LAST #
+postrotate
+    /usr/bin/killall -HUP syslog-ng
+endscript
+
+#EOF#

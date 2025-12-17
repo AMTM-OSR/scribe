@@ -1,5 +1,6 @@
 #!/bin/sh -
-#
+
+##################################################################
 #                        _            
 #                     _ ( )           
 #   ___    ___  _ __ (_)| |_      __  
@@ -16,6 +17,11 @@
 # Installation command:
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
+##################################################################
+# Last Modified: 2025-Dec-16
+#-----------------------------------------------------------------
+
+################       Shellcheck directives     ################
 # shellcheck disable=SC1090
 # shellcheck disable=SC1091
 # shellcheck disable=SC2009
@@ -25,9 +31,7 @@
 # shellcheck disable=SC2034
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
-##################################################################
-# Last Modified: 2025-Dec-06
-#-----------------------------------------------------------------
+#################################################################
 
 # Ensure firmware binaries are used, not Entware #
 export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
@@ -52,7 +56,7 @@ do
             banner=false
             shift
             ;;
-        service_event)
+        service_event | LogRotate)
             banner=false
             action="$1"
             break
@@ -74,7 +78,7 @@ readonly scribe_ver="v3.2.6"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25120600"
+readonly scriptVer_TAG="25121622"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
@@ -1168,7 +1172,6 @@ _Generate_ListOf_LogFiles_Without_Configs_()
     while IFS='' read -r theLogFile || [ -n "$theLogFile" ]
     do
         configFileOK=false
-
         for configFilePath in $(ls -1 $theLogConfigExp 2>/dev/null)
         do
             if [ ! -s "$configFilePath" ] || \
@@ -1235,9 +1238,9 @@ _RotateAllLogFiles_Preamble_()
     fi
     cp -fp "$logRotateGlobalConf" "${config_d}/${logRotateGlobalName}.SAVED"
 
-    lineNumEndin="$(grep -wn "endscript" "$logRotateGlobalConf" | cut -d':' -f1)"
-    lineNumBegin="$(grep -wn "postrotate" "$logRotateGlobalConf" | cut -d':' -f1)"
-    if [ -z "$lineNumEndin" ] || [ -z "$lineNumEndin" ]
+    lineNumEndin="$(grep -wn -m1 "^endscript" "$logRotateGlobalConf" | cut -d':' -f1)"
+    lineNumBegin="$(grep -wn -m1 "^postrotate" "$logRotateGlobalConf" | cut -d':' -f1)"
+    if [ -z "$lineNumBegin" ] || [ -z "$lineNumEndin" ]
     then return 1
     fi
     lineNumEndin="$((lineNumEndin + 1))"
@@ -2247,8 +2250,8 @@ scribe_menu()
                         dlt "$lr_temp"
                         pause=false
                     else
-                        printf "\nUnable to acquire lock to run logrotate.\n" >> "$script_debug"
-                        printf "\nThe program may be currently running.\n\n"  >> "$script_debug"
+                        printf "\n${red} Unable to acquire lock to run logrotate.${std}\n"
+                        printf "\n${red} The program may be currently running.${std}\n\n"
                     fi
                     ;;
                 ui)
@@ -2337,7 +2340,7 @@ if [ "$action" = "menu" ]
 then
     menu_type="main"
     scribe_menu
-elif [ "$action" != "LogRotate" ]
+elif ! echo "$action" | grep -q '^LogRotate'
 then
     ScriptLogo
 fi
@@ -2433,6 +2436,20 @@ case "$action" in
         then
             _DoRotateLogFiles_ CRON
             _ReleaseFLock_
+        fi
+        exit 0
+        ;;
+
+    LogRotateDebug)
+        if _AcquireFLock_
+        then
+            dlt "$lr_temp"
+            _DoRotateLogFiles_ DEBUG TEMP
+            _ReleaseFLock_
+            more "$lr_temp"
+        else
+            printf "\n${red} Unable to acquire lock to run logrotate.${std}\n"
+            printf "\n${red} The program may be currently running.${std}\n\n"
         fi
         exit 0
         ;;

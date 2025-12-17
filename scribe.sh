@@ -78,7 +78,7 @@ readonly scribe_ver="v3.2.6"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25121622"
+readonly scriptVer_TAG="25121623"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
@@ -1139,23 +1139,31 @@ _ReleaseFLock_()
 ##-------------------------------------##
 _Generate_ListOf_Filtered_LogFiles_()
 {
-    local tmpLogList="${HOMEdir}/tempLogs_$$.txt"
+    local tmpSysLogList="${HOMEdir}/${script_name}_tempSysLogList_$$.txt"
+    local tmpFilterList="${HOMEdir}/${script_name}_tempFltLogList_$$.txt"
 
-    printf '' > "$filteredLogList"
-    if "$syslogNgCmd" --preprocess-into="$tmpLogList"
+    printf '' > "$tmpFilterList"
+    [ ! -f "$filteredLogList" ] && printf '' > "$filteredLogList"
+
+    if "$syslogNgCmd" --preprocess-into="$tmpSysLogList"
     then
         while read -r theLINE && [ -n "$theLINE" ]
         do
             logFilePath="$(echo "$theLINE" | sed -e 's/^[ ]*file("//;s/".*$//')"
-            if grep -qE "^${logFilePath}$" "$filteredLogList"
+            if grep -qE "^${logFilePath}$" "$tmpFilterList"
             then continue  #Avoid duplicates#
             fi
-            echo "$logFilePath" >> "$filteredLogList"
+            echo "$logFilePath" >> "$tmpFilterList"
         done <<EOT
-$(grep -A 1 "^destination" "$tmpLogList" | grep -E '[[:blank:]]*file\("/' | grep -v '.*/log/messages')
+$(grep -A 1 "^destination" "$tmpSysLogList" | grep -E '[[:blank:]]*file\("/' | grep -v '.*/log/messages')
 EOT
     fi
-    rm -f "$tmpLogList"
+
+    if ! diff -q "$tmpFilterList" "$filteredLogList" >/dev/null 2>&1
+    then
+        mv -f "$tmpFilterList" "$filteredLogList"
+    fi
+    rm -f "$tmpSysLogList" "$tmpFilterList"
 }
 
 ##-------------------------------------##
@@ -1164,14 +1172,16 @@ EOT
 _Generate_ListOf_LogFiles_Without_Configs_()
 {
     local theLogConfigExp="${logRotateDir}/*"
-    local configFilePath  configFileOK
+    local configFilePath  configFileOK  theLogFile
 
-    [ ! -s "$filteredLogList" ] && return 1
     printf '' > "$noConfigLogList"
+    [ ! -s "$filteredLogList" ] && return 1
 
-    while IFS='' read -r theLogFile || [ -n "$theLogFile" ]
+    while IFS='' read -r theLINE || [ -n "$theLINE" ]
     do
+        theLogFile="$(echo "$theLINE" | sed 's/ *$//')"
         configFileOK=false
+
         for configFilePath in $(ls -1 $theLogConfigExp 2>/dev/null)
         do
             if [ ! -s "$configFilePath" ] || \

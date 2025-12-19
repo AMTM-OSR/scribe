@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2025-Dec-16
+# Last Modified: 2025-Dec-18
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -78,7 +78,7 @@ readonly scribe_ver="v3.2.6"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25121623"
+readonly scriptVer_TAG="25121822"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
@@ -1225,7 +1225,8 @@ _DoPostRotateCleanup_()
 ##-------------------------------------##
 _RotateAllLogFiles_Preamble_()
 {
-    local lineNumBegin  lineNumEndin
+    local lineNumInsert
+    local tmpLogRotateAction="${HOMEdir}/${script_name}_tempLogRotateAction_$$.txt"
 
     doPostRotateCleanup=false
     _Generate_ListOf_Filtered_LogFiles_
@@ -1248,16 +1249,22 @@ _RotateAllLogFiles_Preamble_()
     fi
     cp -fp "$logRotateGlobalConf" "${config_d}/${logRotateGlobalName}.SAVED"
 
-    lineNumEndin="$(grep -wn -m1 "^endscript" "$logRotateGlobalConf" | cut -d':' -f1)"
-    lineNumBegin="$(grep -wn -m1 "^postrotate" "$logRotateGlobalConf" | cut -d':' -f1)"
-    if [ -z "$lineNumBegin" ] || [ -z "$lineNumEndin" ]
-    then return 1
-    fi
-    lineNumEndin="$((lineNumEndin + 1))"
-    sed -i "${lineNumEndin}i }" "$logRotateGlobalConf"
-    sed -i "${lineNumBegin}i {" "$logRotateGlobalConf"
-    lineNumBegin="$((lineNumBegin - 1))"
-    sed -i "${lineNumBegin}r $noConfigLogList" "$logRotateGlobalConf"
+    lineNumInsert="$(grep -wn -m1 "^endscript" "$logRotateGlobalConf" | cut -d':' -f1)"
+    [ -z "$lineNumInsert" ] && return 1
+    lineNumInsert="$((lineNumInsert + 1))"
+
+    cat "$noConfigLogList" > "$tmpLogRotateAction"
+    cat <<EOF >> "$tmpLogRotateAction"
+{
+   lastaction
+      /usr/bin/killall -HUP syslog-ng
+   endscript
+}
+
+EOF
+
+    sed -i "${lineNumInsert}r $tmpLogRotateAction" "$logRotateGlobalConf"
+    rm -f "$tmpLogRotateAction"
     doPostRotateCleanup=true
 }
 

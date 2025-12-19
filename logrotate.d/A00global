@@ -4,7 +4,7 @@
 sharedscripts
 
 # compress, but not first rotation due to file handling
-compress
+##compress
 delaycompress
 
 # large logs make webui unresponsive with uiScribe

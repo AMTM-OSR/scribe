@@ -4,7 +4,7 @@
 # The global settings will also be applied to every log file for 
 # which no corresponding logrotate configuration file is found.
 #-----------------------------
-# Last Modified: 2025-Dec-16
+# Last Modified: 2025-Dec-18
 #------------------------------------------------------------------#
 
 weekly
@@ -12,7 +12,6 @@ minsize 512k
 maxsize 4096k
 rotate 4
 maxage 30
-compress
 delaycompress
 create
 dateext

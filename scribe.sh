@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2025-Dec-18
+# Last Modified: 2025-Dec-21
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -78,7 +78,7 @@ readonly scribe_ver="v3.2.6"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25121822"
+readonly scriptVer_TAG="25122122"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
@@ -1256,7 +1256,7 @@ _RotateAllLogFiles_Preamble_()
     cat "$noConfigLogList" > "$tmpLogRotateAction"
     cat <<EOF >> "$tmpLogRotateAction"
 {
-   lastaction
+   postrotate
       /usr/bin/killall -HUP syslog-ng
    endscript
 }

@@ -1,5 +1,6 @@
 #!/bin/sh -
-#
+
+##################################################################
 #                        _            
 #                     _ ( )           
 #   ___    ___  _ __ (_)| |_      __  
@@ -16,6 +17,11 @@
 # Installation command:
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
+##################################################################
+# Last Modified: 2025-Dec-21
+#-----------------------------------------------------------------
+
+################       Shellcheck directives     ################
 # shellcheck disable=SC1090
 # shellcheck disable=SC1091
 # shellcheck disable=SC2009
@@ -25,9 +31,7 @@
 # shellcheck disable=SC2034
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
-##################################################################
-# Last Modified: 2025-Nov-23
-#-----------------------------------------------------------------
+#################################################################
 
 # Ensure firmware binaries are used, not Entware #
 export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
@@ -52,7 +56,7 @@ do
             banner=false
             shift
             ;;
-        service_event)
+        service_event | LogRotate)
             banner=false
             action="$1"
             break
@@ -67,23 +71,23 @@ done
 
 # scribe constants #
 readonly script_name="scribe"
-scribe_branch="master"
+scribe_branch="develop"
 script_branch="$scribe_branch"
 # Version number for amtm compatibility #
-readonly scribe_ver="v3.2.5"
+readonly scribe_ver="v3.2.6"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25112322"
+readonly scriptVer_TAG="25122122"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
-readonly script_zip_file="$TMP/${script_name}_TEMP.zip"
-readonly script_tmp_file="$TMP/${script_name}_TEMP.tmp"
+readonly script_zip_file="${TMP}/${script_name}_TEMP.zip"
+readonly script_tmp_file="${TMP}/${script_name}_TEMP.tmp"
 readonly script_d="/jffs/scripts"
-readonly script_loc="$script_d/$script_name"
-readonly conf_d="/jffs/addons/${script_name}.d"
-readonly script_conf="$conf_d/config"
+readonly script_loc="${script_d}/$script_name"
+readonly config_d="/jffs/addons/${script_name}.d"
+readonly script_conf="${config_d}/config"
 readonly optmsg="/opt/var/log/messages"
 readonly jffslog="/jffs/syslog.log"
 readonly tmplog="/tmp/syslog.log"
@@ -139,9 +143,9 @@ readonly lr_loc="/opt/sbin/$lr"
 readonly sng_conf="/opt/etc/${sng}.conf"
 readonly debug_sep="=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*="
 readonly script_debug_name="${script_name}_debug.log"
-readonly script_debug="$TMP/$script_debug_name"
-readonly sngconf_merged="$TMP/${sng}-complete.conf"
-readonly sngconf_error="$TMP/${sng}-error.conf"
+readonly script_debug="${TMP}/$script_debug_name"
+readonly sngconf_merged="${TMP}/${sng}-complete.conf"
+readonly sngconf_error="${TMP}/${sng}-error.conf"
 readonly lr_conf="/opt/etc/${lr}.conf"
 readonly lr_daily="/opt/tmp/logrotate.daily"
 readonly lr_temp="/opt/tmp/logrotate.temp"
@@ -151,7 +155,7 @@ readonly etc_d="/opt/etc/*.d"
 readonly sng_share="/opt/share/$sng"
 readonly lr_share="/opt/share/$lr"
 readonly share_ex="/opt/share/*/examples"
-readonly script_bakname="$TMP/${script_name}-backup.tar.gz"
+readonly script_bakname="${TMP}/${script_name}-backup.tar.gz"
 readonly fire_start="$script_d/firewall-start"
 readonly srvcEvent="$script_d/service-event"
 readonly postMount="$script_d/post-mount"
@@ -161,10 +165,43 @@ readonly sky_req="6.9.2"
 readonly divers="/opt/bin/diversion"
 readonly div_req="4.1"
 
+##-------------------------------------##
+## Added by Martinski W. [2025-Dec-05] ##
+##-------------------------------------##
+readonly HOMEdir="/home/root"
+readonly optTempDir="/opt/tmp"
+readonly optVarLogDir="/opt/var/log"
+readonly syslogNgStr="syslog-ng"
+readonly logRotateStr="logrotate"
+readonly syslogNgCmd="/opt/sbin/$syslogNgStr"
+readonly logRotateCmd="/opt/sbin/$logRotateStr"
+readonly logRotateDir="/opt/etc/${logRotateStr}.d"
+readonly logRotateShareDir="/opt/share/$logRotateStr"
+readonly logRotateExamplesDir="${logRotateShareDir}/examples"
+readonly logRotateTopConf="/opt/etc/${logRotateStr}.conf"
+readonly logRotateGlobalName="A01global"
+readonly logRotateGlobalConf="${logRotateDir}/$logRotateGlobalName"
+readonly LR_FLock_FD=513
+readonly LR_FLock_FName="/tmp/scribeLogRotate.flock"
+readonly logFilesRegExp="${optVarLogDir}/.*([.]log)?"
+readonly filteredLogList="${config_d}/.filteredlogs"
+readonly noConfigLogList="${config_d}/.noconfiglogs"
+
+##-------------------------------------##
+## Added by Martinski W. [2025-Nov-29] ##
+##-------------------------------------##
+readonly oneMByte=1048576
+readonly twoMByte=2097152
+readonly LR_CronJobMins=5
+readonly LR_CronJobHour=0
+readonly LR_CronTagStr="scribeLogRotate"
+readonly validHourRegExp="(6|8|12|24)"
+readonly validHourLstStr="6, 8, 12, or 24."
+
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Jul-07] ##
 ##----------------------------------------##
-# uiScribe constants #
+# uiScribe add-on constants #
 readonly uiscribeName="uiScribe"
 readonly uiscribeAuthor="AMTM-OSR"
 readonly uiscribeBranch="master"
@@ -172,7 +209,7 @@ readonly uiscribeRepo="$raw_git/$uiscribeAuthor/$uiscribeName/$uiscribeBranch/${
 readonly uiscribePath="$script_d/$uiscribeName"
 readonly uiscribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})"
 
-# color constants
+# color constants #
 readonly red="\033[1;31m"
 readonly green="\033[1;32m"
 readonly yellow="\033[1;33m"
@@ -180,7 +217,9 @@ readonly blue="\033[1;34m"
 readonly magenta="\033[1;35m"
 readonly cyan="\033[1;36m"
 readonly white="\033[1;37m"
-readonly std="\033[0m"
+readonly std="\e[0m"
+readonly CLRD="\e[0m"
+readonly BOLD="\e[1m"
 
 readonly header="=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=${std}\n\n"
 
@@ -218,9 +257,11 @@ finished(){ printf "$green done. $std\n"; }
 
 not_installed(){ printf "\n$blue %s$red NOT$white installed! $std\n" "$1"; }
 
-enter_to(){ printf "$white Press <Enter> key to %s: $std" "$1"; read -rs inputKey; echo; }
+PressEnterTo()
+{ printf "$white Press <Enter> key to %s: $std" "$1"; read -rs inputKey; echo; }
 
-VersionStrToNum(){ echo "$1" | sed 's/v//; s/_/./' | awk -F. '{ printf("%d%03d%02d\n", $1, $2, $3); }'; }
+VersionStrToNum()
+{ echo "$1" | sed 's/v//; s/_/./' | awk -F. '{ printf("%d%03d%02d\n", $1, $2, $3); }'; }
 
 md5_file(){ md5sum "$1" | awk '{ printf( $1 ); }'; } # get md5sum of file
 
@@ -232,9 +273,21 @@ same_same(){ if [ "$( md5_file "$1" )" = "$( md5_file "$2" )" ]; then true; else
 
 date_stamp(){ [ -e "$1" ] && mv "$1" "$1-$( date -Iseconds | cut -c 1-19 )"; }
 
-sng_rng(){ if [ -n "$( pidof $sng )" ]; then true; else false; fi; }
+SyslogNg_Running(){ if [ -n "$( pidof $sng )" ]; then true; else false; fi; }
 
-sld_rng(){ if [ -n "$( pidof $sld )" ]; then true; else false; fi; }
+SyslogDm_Running(){ if [ -n "$( pidof $sld )" ]; then true; else false; fi; }
+
+##-------------------------------------##
+## Added by Martinski W. [2025-Nov-30] ##
+##-------------------------------------##
+_GetFileSize_()
+{
+   if [ $# -eq 0 ] || [ -z "$1" ] || [ ! -s "$1" ]
+   then echo 0 ; return 1
+   fi
+   ls -1l "$1" | awk -F ' ' '{print $3}'
+   return 0
+}
 
 # NB: ensure system log is backed up before doing this!
 clear_loglocs()
@@ -249,13 +302,15 @@ start_syslogd()
 {
     service start_logger
     count=30
-    while ! sld_rng && [ "$count" -gt 0 ]
+    while ! SyslogDm_Running && [ "$count" -gt 0 ]
     do
-        sleep 1 # give syslogd time to start up
+        sleep 1 # give syslogd time to start up #
         count="$(( count - 1 ))"
     done
     if [ "$count" -eq 0 ]
-    then printf "\n$red UNABLE TO START SYSLOGD!  ABORTING!\n$std"; exit 1
+    then
+        printf "\n$red UNABLE TO START SYSLOGD! ABORTING!\n$std"
+        exit 1
     fi
 }
 
@@ -264,9 +319,12 @@ start_syslogd()
 ##-------------------------------------##
 _ServiceEventTime_()
 {
-    [ ! -d "$conf_d" ] && mkdir "$conf_d"
+    [ ! -d "$config_d" ] && mkdir "$config_d"
     [ ! -e "$script_conf" ] && touch "$script_conf"
-    if [ $# -eq 0 ] || [ -z "$1" ] ; then return 1; fi
+
+    if [ $# -eq 0 ] || [ -z "$1" ]
+    then return 1
+    fi
     local timeNotFound  lastEventTime
 
     if ! grep -q "^SRVC_EVENT_TIME=" "$script_conf"
@@ -299,20 +357,53 @@ _ServiceEventTime_()
     esac
 }
 
-##----------------------------------------##
-## Modified by Martinski W. [2025-Jun-22] ##
-##----------------------------------------##
-CFG_Write_Syslog_Path()
+##-------------------------------------##
+## Added by Martinski W. [2025-Nov-29] ##
+##-------------------------------------##
+_Config_Option_Update_()
 {
-    [ ! -d "$conf_d" ] && mkdir "$conf_d"
+    [ ! -d "$config_d" ] && mkdir "$config_d"
     [ ! -e "$script_conf" ] && touch "$script_conf"
-    if [ $# -eq 0 ] || [ -z "$1" ] ; then return 1; fi
 
-    if ! grep -q "^SYSLOG_LOC=" "$script_conf"
+    if [ $# -lt 2 ] || [ -z "$1" ] || [ -z "$2" ]
+    then return 1
+    fi
+    if ! grep -qE "^${1}=" "$script_conf"
     then
-        echo "SYSLOG_LOC=$1" >> "$script_conf"
+        echo "${1}=${2}" >> "$script_conf"
     else
-        sed -i "s~SYSLOG_LOC=.*~SYSLOG_LOC=$1~" "$script_conf"
+        sed -i "s~${1}=.*~${1}=${2}~" "$script_conf"
+    fi
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2025-Nov-29] ##
+##-------------------------------------##
+_Config_Option_Get_()
+{
+   [ ! -d "$config_d" ] && mkdir "$config_d"
+   [ ! -e "$script_conf" ] && touch "$script_conf"
+
+   if [ ! -s "$script_conf" ]    || \
+      [ $# -eq 0 ] || [ -z "$1" ] || \
+      ! grep -qE "^${1}=" "$script_conf"
+   then
+       echo ; return 1
+   fi
+   grep "^${1}=" "$script_conf" | cut -d'=' -f2
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2025-Nov-29] ##
+##-------------------------------------##
+_Config_Option_Check_()
+{
+    if [ $# -eq 0 ] || [ -z "$1" ]
+    then return 1
+    fi
+    if [ -n "$(_Config_Option_Get_ "$1")" ]
+    then return 0
+    else return 1
     fi
 }
 
@@ -322,7 +413,7 @@ CFG_Write_Syslog_Path()
 # function assumes syslogd is running!
 #-----------------------------------------------------------
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Aug-25] ##
+## Modified by Martinski W. [2025-Nov-29] ##
 ##----------------------------------------##
 where_syslogd()
 {
@@ -335,22 +426,23 @@ where_syslogd()
             syslog_loc="$(echo "$findStr" | awk -F' ' '{print $2}')"
         fi
     fi
-    [ -n "$syslog_loc" ] && CFG_Write_Syslog_Path "$syslog_loc"
+    [ -n "$syslog_loc" ] && \
+    _Config_Option_Update_ SYSLOG_LOC "$syslog_loc"
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Aug-25] ##
+## Modified by Martinski W. [2025-Nov-30] ##
 ##----------------------------------------##
 create_conf()
 {
     printf "\n$white Detecting default syslog location... "
-    if sng_rng
+    if SyslogNg_Running
     then
         slg_was_rng=true
         printf "\n Briefly shutting down %s" "$sng"
         killall -q $sng 2>/dev/null
         count=10
-        while sng_rng && [ "$count" -gt 0 ]
+        while SyslogNg_Running && [ "$count" -gt 0 ]
         do
             sleep 1
             count="$(( count - 1 ))"
@@ -360,40 +452,50 @@ create_conf()
         slg_was_rng=false
     fi
 
-    if ! sld_rng
+    if ! SyslogDm_Running
     then start_syslogd
     fi
     where_syslogd
+
     if "$slg_was_rng"
     then
-        # if syslog-ng was running, kill syslogd and restart
+        # if syslog-ng was running, kill syslogd and restart #
         $S01sng_init start
-    elif [ -n "$syslog_loc" ] && [ -s "$syslog_loc" ]
+    elif [ -x "$sng_loc" ] && [ -x "$lr_loc" ] && \
+         [ -d "$lrd_d" ] && [ -n "$syslog_loc" ] && \
+         [ -s "$syslog_loc" ] && [ ! -L "$syslog_loc" ]
     then
-        # prepend /opt/var/messages to syslog & create link
-        cat "$syslog_loc" >> "$optmsg" && mv -f "$optmsg" "$syslog_loc"
+        # prepend /opt/var/messages to syslog & create link #
+        cat "$syslog_loc" >> "$optmsg"
+        mv -f "$optmsg" "$syslog_loc"
         ln -s "$syslog_loc" "$optmsg"
     fi
     # assume uiScribe is still running if it was before stopping syslog-ng #
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Aug-25] ##
+## Modified by Martinski W. [2025-Nov-29] ##
 ##----------------------------------------##
 read_conf()
 {
     if [ -s "$script_conf" ] && grep -q "^SYSLOG_LOC=" "$script_conf"
     then
-        syslog_loc="$(grep "^SYSLOG_LOC=" "$script_conf" | cut -f2 -d'=')"
+        syslog_loc="$(_Config_Option_Get_ SYSLOG_LOC)"
     else
         create_conf
     fi
     export syslog_loc
 
+    if ! _Config_Option_Check_ LR_CRONJOB_HOUR
+    then
+        _Config_Option_Update_ LR_CRONJOB_HOUR 24
+    fi
+
     # Set correct permissions to avoid "world-readable" status #
     if [ "$action" != "debug" ] && \
        [ -f /var/lib/logrotate.status ]
-    then chmod 600 /var/lib/logrotate.status ; fi
+    then chmod 600 /var/lib/logrotate.status
+    fi
 }
 
 ##----------------------------------------##
@@ -504,7 +606,7 @@ Hup_uiScribe()
 {
     if "$uiScribeInstalled"
     then
-        printf "$white Restarting uiScribe ...\n"
+        printf "$white Restarting $uiscribeName ...\n"
         $uiscribePath startup
     fi
 }
@@ -528,13 +630,13 @@ copy_rcfunc()
 check_sng()
 {
     printf "\n$white %34s" "checking $sng daemon ..."
-    if sng_rng
+    if SyslogNg_Running
     then
         printf "$green alive. $std\n"
     else
         printf "$red dead. $std\n"
         printf "$white %34s" "the system logger (syslogd) ..."
-        if sld_rng
+        if SyslogDm_Running
         then
             printf "$green is running. $std\n\n"
             printf "$yellow    Type$red %s restart$yellow at shell prompt or select$red rs$yellow\n" "$script_name"
@@ -565,11 +667,11 @@ rd_warn(){
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Aug-25] ##
+## Modified by Martinski W. [2025-Nov-29] ##
 ##----------------------------------------##
 syslogd_check()
 {
-    local checksys_loc=""
+    local checksys_loc
 
     printf "$white %34s" "syslog.log default location ..."
     if [ "$syslog_loc" != "$jffslog" ] && [ "$syslog_loc" != "$tmplog" ]
@@ -582,10 +684,8 @@ syslogd_check()
     fi
     printf "$white %34s" "... & agrees with config file ..."
 
-    if [ -s "$script_conf" ] && grep -q "^SYSLOG_LOC=" "$script_conf"
-    then
-        checksys_loc="$(grep "^SYSLOG_LOC=" "$script_conf" | cut -f2 -d'=')"
-    fi
+    checksys_loc="$(_Config_Option_Get_ SYSLOG_LOC)"
+
     if [ -z "$checksys_loc" ]
     then
         printf "$red NO CONFIG FILE!\n"
@@ -630,21 +730,55 @@ sed_srvcEvent()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Jun-16] ##
+## Modified by Martinski W. [2025-Dec-05] ##
 ##----------------------------------------##
-lr_post()
+LogRotate_CronJob_PostMount_Create()
+{
+    local foundLineCount  cronHourTmp
+    local cronMinsStr="$LR_CronJobMins"
+    local cronHourStr="$(_Get_LogRotate_CronHour_)"
+
+    [ ! -x "$postMount" ] && chmod 0755 "$postMount"
+
+    cronHourTmp="$(echo "$cronHourStr" | sed 's/\*/[\*]/')"
+
+    foundLineCount="$(grep -cE "cru a $logRotateStr .* [*] [*] [*] $lr_loc $lr_conf" "$postMount")"
+    if [ "$foundLineCount" -gt 0 ]
+    then 
+        sed -i "/cru a ${logRotateStr}/d" "$postMount"
+    fi
+    foundLineCount="$(grep -cE "cru a $LR_CronTagStr .* [*] [*] [*] $script_loc LogRotate" "$postMount")"
+
+    if ! grep -qE "cru a $LR_CronTagStr \"$cronMinsStr $cronHourTmp [*] [*] [*] $script_loc LogRotate" "$postMount"
+    then
+        if [ "$foundLineCount" -gt 0 ]
+        then 
+            sed -i "/cru a ${LR_CronTagStr}/d" "$postMount"
+        fi
+        {
+           echo '[ -x "${1}/entware/bin/opkg" ] && cru a '"$LR_CronTagStr"' "'"$cronMinsStr $cronHourStr"' * * * '"$script_loc"' LogRotate" #'"$script_name"'#'
+        } >> "$postMount"
+        return 0
+    else
+        return 1
+    fi
+}
+
+##----------------------------------------##
+## Modified by Martinski W. [2025-Nov-29] ##
+##----------------------------------------##
+LogRotate_CronJob_PostMount_Check()
 {
     printf "$white %34s" "checking $( strip_path "$postMount" ) ..."
-    if [ ! -f "$postMount" ]
+    if [ ! -s "$postMount" ]
     then
         printf "$red MISSING! \n"
         printf " Entware is not properly set up!\n"
-        printf " Correct Entware installation before continuing! $std\n\n"
+        printf " Correct Entware installation before continuing! ${std}\n\n"
         exit 1
     fi
-    if ! grep -q "$lr" "$postMount"
+    if LogRotate_CronJob_PostMount_Create
     then
-        echo "cru a $lr \"5 0 * * * $lr_loc $lr_conf >> $lr_daily 2>&1\" # added by $script_name" >> "$postMount"
         updated
     else
         present
@@ -676,12 +810,105 @@ sed_unMount()
     [ ! -x "$unMount" ] && chmod 0755 "$unMount"
 }
 
-lr_cron()
+##-------------------------------------##
+## Added by Martinski W. [2025-Nov-29] ##
+##-------------------------------------##
+_Create_LogRotate_CronJob_()
+{
+    if [ $# -eq 0 ] || [ -z "$1" ]
+    then return 1
+    fi
+    cru a "$LR_CronTagStr" "$LR_CronJobMins $1 * * * $script_loc LogRotate"
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2025-Nov-29] ##
+##-------------------------------------##
+_Get_LogRotate_CronHour_()
+{
+    local cronHourNum  cronHourStr
+
+    cronHourNum="$(_Config_Option_Get_ LR_CRONJOB_HOUR)"
+    if [ -z "$cronHourNum" ] || \
+       ! echo "$cronHourNum" | grep -qE "^${validHourRegExp}$"
+    then
+        cronHourStr="$LR_CronJobHour"
+        _Config_Option_Update_ LR_CRONJOB_HOUR 24
+    elif [ "$cronHourNum" = "24" ]
+    then
+        cronHourStr="$LR_CronJobHour"
+    else
+        cronHourStr="*/$cronHourNum"
+    fi
+
+    echo "$cronHourStr"
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2025-Nov-29] ##
+##-------------------------------------##
+menu_LogRotate_CronJob_Time()
+{
+    local cronHourNum  cronHourStr  hourInput  validInput
+
+    validInput=false
+    while true
+    do
+        ScriptLogo
+        printf "$white $header"
+        cronHourNum="$(_Config_Option_Get_ LR_CRONJOB_HOUR)"
+        printf " ${BOLD}Current $lr cron job interval: "
+        printf "${green}Every ${cronHourNum} hours${CLRD}\n"
+        printf "\n ${BOLD}Please enter how often in HOURS to run the cron job."
+        printf "\n Every N hours, where N is ${green}${validHourLstStr}${CLRD} "
+        printf "(${green}e${CLRD}=Exit):  "
+        read -r hourInput
+
+        if echo "$hourInput" | grep -qE "^[eE]$"
+        then
+            echo ; break
+        elif [ -z "$hourInput" ] || \
+             ! echo "$hourInput" | grep -qE "^${validHourRegExp}$"
+        then
+            printf "\n ${red}Please enter a valid number:${CLRD} "
+            printf "${green}${validHourLstStr}${CLRD}\n\n"
+            PressEnterTo "continue"
+        elif [ "$hourInput" -eq 24 ]
+        then
+            validInput=true
+            cronHourNum="$hourInput"
+            cronHourStr="$LR_CronJobHour"
+            echo ; break
+        else
+            validInput=true
+            cronHourNum="$hourInput"
+            cronHourStr="*/$hourInput"
+            echo ; break
+        fi
+    done
+
+    if "$validInput"
+    then
+        _Config_Option_Update_ LR_CRONJOB_HOUR "$cronHourNum"
+        _Create_LogRotate_CronJob_ "$cronHourStr"
+        LogRotate_CronJob_PostMount_Create
+    fi
+}
+
+##----------------------------------------##
+## Modified by Martinski W. [2025-Dec-05] ##
+##----------------------------------------##
+LogRotate_CronJob_Check()
 {
     printf "$white %34s" "checking $lr cron job ..."
-    if ! cru l | grep -q "$lr"
+
+    if cru l | grep -q "#${logRotateStr}#"
     then
-        cru a "$lr" "5 0 * * * $lr_loc $lr_conf >> $lr_daily 2>&1"
+        cru d "$logRotateStr"
+    fi
+    if ! cru l | grep -q "#${LR_CronTagStr}#"
+    then
+        _Create_LogRotate_CronJob_ "$(_Get_LogRotate_CronHour_)"
         updated
     else
         present
@@ -745,7 +972,10 @@ sync_conf()
 sng_syntax()
 {
     printf "$white %34s" "$( strip_path "$sng_conf" ) syntax check ..."
-    if $sng_loc -s >> /dev/null 2>&1; then printf "$green okay! $std\n"; else printf "$red FAILED! $std\n\n"; fi
+    if $sng_loc -s >> /dev/null 2>&1
+    then printf "$green okay! $std\n"
+    else printf "$red FAILED! $std\n\n"
+    fi
 }
 
 ##----------------------------------------##
@@ -886,14 +1116,195 @@ show_loaded()
     less "$sngconf_merged"
 }
 
-run_logrotate()
+##-------------------------------------##
+## Added by Martinski W. [2025-Dec-05] ##
+##-------------------------------------##
+_AcquireFLock_()
 {
-    dlt "$lr_daily"
+   local opts=""
+   eval exec "$LR_FLock_FD>$LR_FLock_FName"
+   
+   if [ $# -eq 1 ] && [ "$1" = "nonblock" ]
+   then opts="-n"
+   fi
+   flock -x $opts "$LR_FLock_FD"
+   return "$?"
+}
+
+_ReleaseFLock_()
+{ flock -u "$LR_FLock_FD" ; }
+
+##-------------------------------------##
+## Added by Martinski W. [2025-Dec-05] ##
+##-------------------------------------##
+_Generate_ListOf_Filtered_LogFiles_()
+{
+    local tmpSysLogList="${HOMEdir}/${script_name}_tempSysLogList_$$.txt"
+    local tmpFilterList="${HOMEdir}/${script_name}_tempFltLogList_$$.txt"
+
+    printf '' > "$tmpFilterList"
+    [ ! -f "$filteredLogList" ] && printf '' > "$filteredLogList"
+
+    if "$syslogNgCmd" --preprocess-into="$tmpSysLogList"
+    then
+        while read -r theLINE && [ -n "$theLINE" ]
+        do
+            logFilePath="$(echo "$theLINE" | sed -e 's/^[ ]*file("//;s/".*$//')"
+            if grep -qE "^${logFilePath}$" "$tmpFilterList"
+            then continue  #Avoid duplicates#
+            fi
+            echo "$logFilePath" >> "$tmpFilterList"
+        done <<EOT
+$(grep -A 1 "^destination" "$tmpSysLogList" | grep -E '[[:blank:]]*file\("/' | grep -v '.*/log/messages')
+EOT
+    fi
+
+    if ! diff -q "$tmpFilterList" "$filteredLogList" >/dev/null 2>&1
+    then
+        mv -f "$tmpFilterList" "$filteredLogList"
+    fi
+    rm -f "$tmpSysLogList" "$tmpFilterList"
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2025-Dec-05] ##
+##-------------------------------------##
+_Generate_ListOf_LogFiles_Without_Configs_()
+{
+    local theLogConfigExp="${logRotateDir}/*"
+    local configFilePath  configFileOK  theLogFile
+
+    printf '' > "$noConfigLogList"
+    [ ! -s "$filteredLogList" ] && return 1
+
+    while IFS='' read -r theLINE || [ -n "$theLINE" ]
+    do
+        theLogFile="$(echo "$theLINE" | sed 's/ *$//')"
+        configFileOK=false
+
+        for configFilePath in $(ls -1 $theLogConfigExp 2>/dev/null)
+        do
+            if [ ! -s "$configFilePath" ] || \
+               [ "${configFilePath##*/}" = "$logRotateGlobalName" ] || \
+               ! grep -qE "$logFilesRegExp" "$configFilePath"
+            then continue
+            fi
+            if grep -qE "$theLogFile" "$configFilePath"
+            then
+                configFileOK=true ; break
+            fi
+        done
+
+        if ! "$configFileOK"
+        then echo "$theLogFile" >> "$noConfigLogList"
+        fi
+    done < "$filteredLogList"
+
+    [ ! -s "$noConfigLogList" ] && rm -f "$noConfigLogList"
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2025-Dec-05] ##
+##-------------------------------------##
+_DoPostRotateCleanup_()
+{
+    if [ ! -s "$logRotateGlobalConf" ] && \
+       [ ! -s "${logRotateExamplesDir}/$logRotateGlobalName" ] 
+    then return 1
+    fi
+    if [ -s "${config_d}/${logRotateGlobalName}.SAVED" ]
+    then
+        mv -f "${config_d}/${logRotateGlobalName}.SAVED" "$logRotateGlobalConf"
+    else
+        cp -fp "${logRotateExamplesDir}/$logRotateGlobalName" "$logRotateGlobalConf"
+    fi
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2025-Dec-05] ##
+##-------------------------------------##
+_RotateAllLogFiles_Preamble_()
+{
+    local lineNumInsert
+    local tmpLogRotateAction="${HOMEdir}/${script_name}_tempLogRotateAction_$$.txt"
+
+    doPostRotateCleanup=false
+    _Generate_ListOf_Filtered_LogFiles_
+    _Generate_ListOf_LogFiles_Without_Configs_
+
+    if [ ! -s "$noConfigLogList" ] || \
+       { [ ! -s "$logRotateGlobalConf" ] && \
+         [ ! -s "${logRotateExamplesDir}/$logRotateGlobalName" ] ; }
+    then return 1
+    fi
+
+    if [ ! -s "$logRotateGlobalConf" ] || \
+       grep -qE "$logFilesRegExp" "$logRotateGlobalConf"
+    then
+        if [ ! -s "${logRotateExamplesDir}/$logRotateGlobalName" ]
+        then return 1
+        fi
+        cp -fp "${logRotateExamplesDir}/$logRotateGlobalName" "$logRotateGlobalConf"
+        chmod 644 "$logRotateGlobalConf"
+    fi
+    cp -fp "$logRotateGlobalConf" "${config_d}/${logRotateGlobalName}.SAVED"
+
+    lineNumInsert="$(grep -wn -m1 "^endscript" "$logRotateGlobalConf" | cut -d':' -f1)"
+    [ -z "$lineNumInsert" ] && return 1
+    lineNumInsert="$((lineNumInsert + 1))"
+
+    cat "$noConfigLogList" > "$tmpLogRotateAction"
+    cat <<EOF >> "$tmpLogRotateAction"
+{
+   postrotate
+      /usr/bin/killall -HUP syslog-ng
+   endscript
+}
+
+EOF
+
+    sed -i "${lineNumInsert}r $tmpLogRotateAction" "$logRotateGlobalConf"
+    rm -f "$tmpLogRotateAction"
+    doPostRotateCleanup=true
+}
+
+##----------------------------------------##
+## Modified by Martinski W. [2025-Dec-05] ##
+##----------------------------------------##
+_DoRotateLogFiles_()
+{
+    local doPostRotateCleanup=false
+    local callType=DORUN  debugLog
+
+    if [ $# -gt 0 ] && [ -n "$1" ]
+    then callType="$1"
+    fi
+
+    _RotateAllLogFiles_Preamble_
+
+    [ "$callType" = "DORUN" ] && \
     printf "\n$white %34s" "running $lr ..."
-    $lr_loc "$lr_conf" >> "$lr_daily" 2>&1
-    finished
-    printf "\n$magenta checking %s log for errors $cyan\n\n" "$lr"
-    tail -v "$lr_daily"
+
+    if [ "$callType" != "DEBUG" ]
+    then
+        rm -f "$lr_daily"
+        $logRotateCmd "$logRotateTopConf" >> "$lr_daily" 2>&1
+    else
+        if [ $# -gt 1 ] && [ "$2" = "TEMP" ]
+        then debugLog="$lr_temp"
+        else debugLog="$script_debug"
+        fi
+        $logRotateCmd -d "$logRotateTopConf" >> "$debugLog" 2>&1
+    fi
+
+    if [ "$callType" = "DORUN" ]
+    then
+        finished
+        printf "\n$magenta checking %s log for errors $cyan\n\n" "$lr"
+        tail -v "$lr_daily"
+    fi
+    sleep 1
+    "$doPostRotateCleanup" && _DoPostRotateCleanup_
 }
 
 menu_status()
@@ -902,13 +1313,15 @@ menu_status()
     syslogd_check
     printf "\n$magenta checking system for necessary %s hooks ...\n\n" "$script_name"
     sed_sng
-    if sng_rng
+    if SyslogNg_Running
     then sed_srvcEvent
     fi
-    lr_post
+    LogRotate_CronJob_PostMount_Check
     sed_unMount
-    if sng_rng
-    then lr_cron; dir_links
+    if SyslogNg_Running
+    then
+        LogRotate_CronJob_Check
+        dir_links
     fi
     printf "\n$magenta checking %s configuration ...\n\n" "$sng"
     sync_conf
@@ -950,8 +1363,8 @@ setup_lr()
 {
     # assumes since entware is required / installed, post-mount exists and is properly executable
     printf "\n$magenta setting up %s ...\n" "$lr"
-    lr_post
-    lr_cron
+    LogRotate_CronJob_PostMount_Check
+    LogRotate_CronJob_Check
 }
 
 ##----------------------------------------##
@@ -1034,7 +1447,7 @@ Uninstall_uiScribe()
     printf "\n"
     if "$uiScribeInstalled"
     then
-        printf "$white uiScribe add-on is detected, uninstalling ...\n\n"
+        printf "$white $uiscribeName add-on is detected, uninstalling ...\n\n"
         $uiscribePath uninstall
     fi
 }
@@ -1110,45 +1523,58 @@ pre_install()
     fi
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2025-Dec-05] ##
+##----------------------------------------##
 menu_install()
 {
-        if [ ! -e "$sng_loc" ]
-        then
-            doInstall "$sng"
-        elif force_install "$sng"
-        then
-            $S01sng_init stop
-            doInstall "$sng" "FORCE"
-        fi
-        echo
-        $S01sng_init start
+    if [ ! -e "$sng_loc" ]
+    then
+        doInstall "$sng"
+    elif force_install "$sng"
+    then
+        $S01sng_init stop
+        doInstall "$sng" "FORCE"
+    fi
+    echo
+    $S01sng_init start
 
-        if [ ! -e "$lr_loc" ]
-        then
-            doInstall "$lr"
-        elif force_install "$lr"
-        then
-            doInstall "$lr" "FORCE"
-        fi
-        run_logrotate
+    if [ ! -e "$lr_loc" ]
+    then
+        doInstall "$lr"
+    elif force_install "$lr"
+    then
+        doInstall "$lr" "FORCE"
+    fi
 
-        if ! "$scribeInstalled"
-        then
-            setup_Scribe "ALL"
-        elif force_install "$script_name script"
-        then
-            setup_Scribe "ALL"
-        fi
+    if _AcquireFLock_ nonblock
+    then
+        _DoRotateLogFiles_
+        _ReleaseFLock_
+    else
+        printf "\n${red} Unable to acquire lock to run logrotate.${std}\n"
+        printf "\n${red} The program may be currently running.${std}\n\n"
+    fi
 
-        rld_sngconf
-        printf "\n$white %s setup complete!\n\n" "$script_name"
-        enter_to "continue"
-        if ! "$uiScribeInstalled" ; then Install_uiScribe ; fi
+    if ! "$scribeInstalled"
+    then
+        setup_Scribe "ALL"
+    elif force_install "$script_name script"
+    then
+        setup_Scribe "ALL"
+    fi
+
+    rld_sngconf
+    printf "\n$white %s setup complete!\n\n" "$script_name"
+    PressEnterTo "continue"
+    if ! "$uiScribeInstalled"
+    then Install_uiScribe
+    fi
 }
 
 menu_restart()
 {
-    if sng_rng
+    if SyslogNg_Running
     then
         printf "\n$yellow Restarting %s... $std\n" "$sng"
         $S01sng_init restart
@@ -1159,37 +1585,61 @@ menu_restart()
     Hup_uiScribe
 }
 
-stop_sng()
+##----------------------------------------##
+## Modified by Martinski W. [2025-Nov-30] ##
+##----------------------------------------##
+StopSyslogNg()
 {
     printf "$white stopping %s ...\n" "$sng"
     $S01sng_init stop
     # remove any syslog links #
     clear_loglocs
-    mv -f "$optmsg" "$syslog_loc"
+
+    ## Do NOT move very large files into JFFS/TMPFS ##
+    logFileSize="$(_GetFileSize_ "$optmsg")"
+    if [ "$(echo "$logFileSize $twoMByte" | awk -F ' ' '{print ($1 < $2)}')" -eq 1 ]
+    then
+        mv -f "$optmsg" "$syslog_loc"
+    else
+        tail -n 16k "$optmsg" > "$syslog_loc"
+    fi
     ln -s "$syslog_loc" "$optmsg"
+
     printf "$white starting system klogd and syslogd ...\n"
     start_syslogd
-    if ! $banner; then return; fi
+    if ! $banner
+    then return 0
+    fi
     printf "\n$white %s will be started at next reboot; you\n" "$sng"
     printf " may type '%s restart' at shell prompt, or\n" "$script_name"
     printf " select rs from %s menu to restart %s $std\n\n" "$script_name" "$sng"
 }
 
-stop_lr() { if cru l | grep -q "$lr" ; then cru d "$lr" ; fi ; }
+StopLogRotate()
+{
+    if cru l | grep -q "#${LR_CronTagStr}#"
+    then cru d "$LR_CronTagStr"
+    fi
+}
 
 menu_stop()
 {
-    stop_sng
-    stop_lr
+    StopSyslogNg
+    StopLogRotate
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2025-Dec-05] ##
+##----------------------------------------##
 doUninstall()
 {
     printf "\n\n"
     banner=false  # suppress certain messages #
     if [ -e "$sng_loc" ]
     then
-        if sng_rng; then stop_sng; fi
+        if SyslogNg_Running
+        then StopSyslogNg
+        fi
         sed -i "/$script_name stop/d" "$unMount"
         sed -i "/$script_name service_event/d" "$srvcEvent"
         dlt "$S01sng_init"
@@ -1211,8 +1661,9 @@ doUninstall()
 
     if [ -e "$lr_loc" ]
     then
-        stop_lr
-        sed -i "/cru a $lr/d" "$postMount"
+        StopLogRotate
+        sed -i "/cru a ${logRotateStr}/d" "$postMount"
+        sed -i "/cru a ${LR_CronTagStr}/d" "$postMount"
         printf "\n$cyan"
         /opt/bin/opkg remove "$lr"
         dlt "$lr_conf"
@@ -1233,7 +1684,7 @@ doUninstall()
         printf "\n$white %s, %s, and %s have been removed from the system.\n" "$sng" "$lr" "$script_name"
         printf " It is recommended to reboot the router at this time.  If you do not\n"
         printf " wish to reboot the router, press ${blue}<Ctrl-C>${std} now to exit.\n\n"
-        enter_to "reboot"
+        PressEnterTo "reboot"
         service reboot; exit 0
     fi
 }
@@ -1377,7 +1828,7 @@ menu_update()
 ##-------------------------------------##
 Update_Version()
 {
-   if sng_rng
+   if SyslogNg_Running
    then
        get_vers
        prt_vers
@@ -1390,7 +1841,7 @@ Update_Version()
 menu_forgrnd()
 {
     restrt=false
-    if sng_rng
+    if SyslogNg_Running
     then
         warning_sign
         printf " %s is currently running; starting the debugging\n" "$sng"
@@ -1404,13 +1855,17 @@ menu_forgrnd()
     printf "\n$yellow NOTE: If there are no errors, debugging mode will\n"
     printf "       continue indefinitely. If this happens, type\n"
     printf "       <Ctrl-C> to halt debugging mode output.\n\n"
-    enter_to "start"
-    if $restrt; then $S01sng_init stop; printf "\n"; fi
+    PressEnterTo "start"
+    if "$restrt"
+    then $S01sng_init stop; echo
+    fi
     trap '' 2
     $sng_loc -Fevd
     trap - 2
-    if $restrt; then printf "\n"; $S01sng_init start; fi
-    printf "\n"
+    if "$restrt"
+    then echo ; $S01sng_init start
+    fi
+    echo
 }
 
 ##----------------------------------------##
@@ -1459,7 +1914,7 @@ gather_debug()
         printf "\n%s\n### %s running configuration:\n" "$debug_sep" "$sng"
     } >> "$script_debug"
 
-    if sng_rng
+    if SyslogNg_Running
     then
         $sngctl_loc config --preprocessed >> "$script_debug"
     else
@@ -1480,8 +1935,16 @@ gather_debug()
     else
         printf "#### syslog-ng on-disk syntax check okay! ####\n" >> "$script_debug"
     fi
+
     printf "\n%s\n### logrotate debug output:\n" "$debug_sep" >> "$script_debug"
-    $lr_loc -d "$lr_conf" >> "$script_debug" 2>&1
+    if _AcquireFLock_
+    then
+        _DoRotateLogFiles_ DEBUG
+        _ReleaseFLock_
+    else
+        printf "\nUnable to acquire lock to run logrotate.\n" >> "$script_debug"
+        printf "\nThe program may be currently running.\n\n"  >> "$script_debug"
+    fi
 
     printf "\n%s\n### Skynet log locations:\n" "$debug_sep" >> "$script_debug"
     if "$skynet_inst"
@@ -1523,7 +1986,7 @@ menu_backup()
 {
     printf "\n$white Backing up %s and %s Configurations ... \n" "$sng" "$lr"
     date_stamp "$script_bakname"
-    tar -zcvf "$script_bakname" "$sng_conf" "$sngd_d" "$lr_conf" "$lrd_d" "$conf_d"
+    tar -zcvf "$script_bakname" "$sng_conf" "$sngd_d" "$lr_conf" "$lrd_d" "$config_d"
     printf "\n$std Backup data is stored in $cyan%s$std.\n\n" "$script_bakname"
 }
 
@@ -1616,7 +2079,7 @@ ut_menu()
     printf "      d.   Generate debug file\n"
     printf "     rd.   Re-detect syslog.log location\n"
     printf "      c.   Check on-disk %s config\n" "$sng"
-    if sng_rng
+    if SyslogNg_Running
     then
         printf "     lc.   Show loaded %s config\n" "$sng"
     fi
@@ -1636,8 +2099,8 @@ ut_menu()
 ##----------------------------------------##
 main_menu()
 {
-    and_lr=" & $lr cron\n"
-    if sng_rng
+    and_lr=" & $lr cron"
+    if SyslogNg_Running
     then
         res="Res"
         ins="Rei"
@@ -1648,19 +2111,20 @@ main_menu()
     if "$scribeInstalled"
     then
         printf "      s.   Show %s status\n" "$script_name"
-        if sng_rng
+        if SyslogNg_Running
         then
             printf "     rl.   Reload %s.conf\n" "$sng"
         fi
         printf "     lr.   Run logrotate now\n"
         printf "     rs.   %start %s" "$res" "$sng"
-        if ! sng_rng
+        if ! SyslogNg_Running
         then
-            printf "$and_lr"
+            printf "${and_lr}\n"
         else
-            printf "\n     st.   Stop %s$and_lr" "$sng"
+            printf "\n     st.   Stop %s${and_lr}" "$sng"
+            printf "\n     ct.   Set $lr cron job time interval\n"
         fi
-        if sng_rng
+        if SyslogNg_Running
         then
             echo
             printf "      u.   Check for script updates\n"
@@ -1675,7 +2139,7 @@ main_menu()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2024-Jul-07] ##
+## Modified by Martinski W. [2025-Dec-05] ##
 ##----------------------------------------##
 scribe_menu()
 {
@@ -1708,7 +2172,7 @@ scribe_menu()
                     menu_status
                     ;;
                 rl)
-                    if sng_rng
+                    if SyslogNg_Running
                     then
                         rld_sngconf
                     else
@@ -1716,16 +2180,31 @@ scribe_menu()
                     fi
                     ;;
                 lr)
-                    run_logrotate
+                    if _AcquireFLock_ nonblock
+                    then
+                        _DoRotateLogFiles_
+                        _ReleaseFLock_
+                    else
+                        printf "\n${red} Unable to acquire lock to run logrotate.${std}\n"
+                        printf "\n${red} The program may be currently running.${std}\n\n"
+                    fi
                     ;;
                 rs)
                     menu_restart
                     menu_status
                     ;;
                 st)
-                    if sng_rng
+                    if SyslogNg_Running
                     then
                         menu_stop
+                    else
+                        not_recog=true
+                    fi
+                    ;;
+                ct)
+                    if SyslogNg_Running
+                    then
+                        menu_LogRotate_CronJob_Time
                     else
                         not_recog=true
                     fi
@@ -1737,7 +2216,7 @@ scribe_menu()
                     Update_Version force
                     ;;
                 ft)
-                    if sng_rng
+                    if SyslogNg_Running
                     then
                         menu_filters
                     else
@@ -1767,7 +2246,7 @@ scribe_menu()
                     create_conf
                     ;;
                 lc)
-                    if sng_rng
+                    if SyslogNg_Running
                     then
                         show_loaded
                         pause=false
@@ -1780,10 +2259,17 @@ scribe_menu()
                     ;;
                 ld)
                     dlt "$lr_temp"
-                    $lr_loc -d "$lr_conf" >> "$lr_temp" 2>&1
-                    less $lr_temp
-                    dlt "$lr_temp"
-                    pause=false
+                    if _AcquireFLock_
+                    then
+                        _DoRotateLogFiles_ DEBUG TEMP
+                        _ReleaseFLock_
+                        less "$lr_temp"
+                        dlt "$lr_temp"
+                        pause=false
+                    else
+                        printf "\n${red} Unable to acquire lock to run logrotate.${std}\n"
+                        printf "\n${red} The program may be currently running.${std}\n\n"
+                    fi
                     ;;
                 ui)
                     if "$uiScribeInstalled"
@@ -1838,8 +2324,12 @@ scribe_menu()
             printf "\n${red} INVALID input [$choice]${std}"
             printf "\n${red} Please choose a valid option.${std}\n\n"
         fi
-        if "$pause" ; then enter_to "continue" ; fi
-        if "$run_scribe" ; then sh "$script_loc" ; exit 0; fi
+        if "$pause"
+        then PressEnterTo "continue"
+        fi
+        if "$run_scribe"
+        then sh "$script_loc" ; exit 0
+        fi
     done
 }
 
@@ -1849,26 +2339,31 @@ scribe_menu()
 
 SetUpRepoBranchVars
 
-if ! sld_rng && ! sng_rng
+if ! SyslogDm_Running && ! SyslogNg_Running
 then
     printf "\n\n${red} *WARNING*: $white No system logger was running!!\n"
     printf "Starting system loggers ..."
     start_syslogd
 fi
 
-# read or create config file #
-read_conf
+if [ "$action" != "help" ] && \
+   [ "$action" != "about" ]
+then
+    # read or create config file #
+    read_conf
+fi
 
 if [ "$action" = "menu" ]
 then
     menu_type="main"
     scribe_menu
-else
+elif ! echo "$action" | grep -q '^LogRotate'
+then
     ScriptLogo
 fi
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Nov-22] ##
+## Modified by Martinski W. [2025-Dec-05] ##
 ##----------------------------------------##
 cliParamCheck=true
 case "$action" in
@@ -1931,7 +2426,7 @@ case "$action" in
 
     #reload syslog-ng configuration#
     reload)
-        if sng_rng
+        if SyslogNg_Running
         then rld_sngconf
         fi
         ;;
@@ -1947,9 +2442,33 @@ case "$action" in
 
     #stop syslog-ng & logrotate cron job#
     stop)
-        if sng_rng
+        if SyslogNg_Running
         then menu_stop
         fi
+        ;;
+
+    # Calling logrotate via a cron Job ##
+    LogRotate)
+        if _AcquireFLock_ nonblock
+        then
+            _DoRotateLogFiles_ CRON
+            _ReleaseFLock_
+        fi
+        exit 0
+        ;;
+
+    LogRotateDebug)
+        if _AcquireFLock_
+        then
+            dlt "$lr_temp"
+            _DoRotateLogFiles_ DEBUG TEMP
+            _ReleaseFLock_
+            more "$lr_temp"
+        else
+            printf "\n${red} Unable to acquire lock to run logrotate.${std}\n"
+            printf "\n${red} The program may be currently running.${std}\n\n"
+        fi
+        exit 0
         ;;
 
     #generate debug tarball#
@@ -1961,14 +2480,15 @@ case "$action" in
 
     #update syslog-ng and logrotate filters - only used in update process#
     filters)
-        if sng_rng
+        if SyslogNg_Running
         then menu_filters
         fi
         ;;
 
     #kill syslogd & klogd - only available via CLI#
     service_event)
-        if ! sng_rng || [ "$2" = "stop" ]
+        if ! SyslogNg_Running || [ "$2" = "stop" ] || \
+           echo "$3" | grep -qE "^$uiscribeName"
         then exit 0
         fi
         #################################################################
@@ -2003,7 +2523,9 @@ esac
 if ! "$scribeInstalled" && "$cliParamCheck"
 then
     printf "\n${yellow} %s ${white}is NOT installed, command \"%s\" not valid!${std}\n\n" "$script_name" "$action"
-elif ! sng_rng && [ "$action" != "stop" ] && "$cliParamCheck"
+elif ! SyslogNg_Running && \
+     "$cliParamCheck" && \
+     [ "$action" != "stop" ]
 then
     printf "\n${yellow} %s ${white}is NOT running, command \"%s\" not valid!${std}\n\n" "$sng" "$action"
 else

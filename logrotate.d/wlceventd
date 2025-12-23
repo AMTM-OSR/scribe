@@ -1,6 +1,0 @@
-/opt/var/log/wlceventd.log {
-    rotate 4
-    postrotate
-        /usr/bin/killall -HUP syslog-ng
-    endscript
-}

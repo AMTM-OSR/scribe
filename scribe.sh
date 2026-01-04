@@ -35,7 +35,7 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.7"
-readonly scriptVer_TAG="26010400"
+readonly scriptVer_TAG="26010401"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -2337,9 +2337,9 @@ scribe_menu()
                     then
                         _DoRotateLogFiles_ DEBUG TEMP
                         _ReleaseFLock_
-                        less "$lr_temp"
-                        dlt "$lr_temp"
+                        more "$lr_temp" ; echo
                         pause=false
+                        PressEnterTo "continue..."
                     else
                         printf "\n${red} Unable to acquire lock to run logrotate.${std}\n"
                         printf "\n${red} The program may be currently running.${std}\n\n"

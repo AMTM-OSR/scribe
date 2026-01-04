@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2025-Dec-21
+# Last Modified: 2026-Jan-03
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -32,6 +32,12 @@
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 #################################################################
+
+readonly script_name="scribe"
+readonly scribe_ver="v3.2.7"
+readonly scriptVer_TAG="26010323"
+scribe_branch="develop"
+script_branch="$scribe_branch"
 
 # Ensure firmware binaries are used, not Entware #
 export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
@@ -70,15 +76,9 @@ done
 [ "$action" = "X" ] && action="menu"
 
 # scribe constants #
-readonly script_name="scribe"
-scribe_branch="develop"
-script_branch="$scribe_branch"
-# Version number for amtm compatibility #
-readonly scribe_ver="v3.2.6"
 # Version 'vX.Y_Z' format because I'm stubborn #
 script_ver="$( echo "$scribe_ver" | sed 's/\./_/2' )"
 readonly script_ver
-readonly scriptVer_TAG="25122122"
 readonly scriptVer_long="$scribe_ver ($scribe_branch)"
 readonly script_author="AMTM-OSR"
 readonly raw_git="https://raw.githubusercontent.com"
@@ -186,28 +186,8 @@ readonly LR_FLock_FName="/tmp/scribeLogRotate.flock"
 readonly logFilesRegExp="${optVarLogDir}/.*([.]log)?"
 readonly filteredLogList="${config_d}/.filteredlogs"
 readonly noConfigLogList="${config_d}/.noconfiglogs"
-
-##-------------------------------------##
-## Added by Martinski W. [2025-Nov-29] ##
-##-------------------------------------##
-readonly oneMByte=1048576
-readonly twoMByte=2097152
-readonly LR_CronJobMins=5
-readonly LR_CronJobHour=0
-readonly LR_CronTagStr="scribeLogRotate"
-readonly validHourRegExp="(6|8|12|24)"
-readonly validHourLstStr="6, 8, 12, or 24."
-
-##----------------------------------------##
-## Modified by Martinski W. [2025-Jul-07] ##
-##----------------------------------------##
-# uiScribe add-on constants #
-readonly uiscribeName="uiScribe"
-readonly uiscribeAuthor="AMTM-OSR"
-readonly uiscribeBranch="master"
-readonly uiscribeRepo="$raw_git/$uiscribeAuthor/$uiscribeName/$uiscribeBranch/${uiscribeName}.sh"
-readonly uiscribePath="$script_d/$uiscribeName"
-readonly uiscribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})"
+readonly sysLogMsgSizeMAX=10240
+readonly sysLogFiFoSizeMIN=1024
 
 # color constants #
 readonly red="\033[1;31m"
@@ -220,6 +200,28 @@ readonly white="\033[1;37m"
 readonly std="\e[0m"
 readonly CLRD="\e[0m"
 readonly BOLD="\e[1m"
+
+##-------------------------------------##
+## Added by Martinski W. [2025-Nov-29] ##
+##-------------------------------------##
+readonly oneMByte=1048576
+readonly twoMByte=2097152
+readonly LR_CronJobMins=5
+readonly LR_CronJobHour=0
+readonly LR_CronTagStr="scribeLogRotate"
+readonly validHourRegExp="(3|4|6|8|12|24)"
+readonly validHourLstStr="3, 4, 6, 8, 12, 24."
+
+##----------------------------------------##
+## Modified by Martinski W. [2025-Jul-07] ##
+##----------------------------------------##
+# uiScribe add-on constants #
+readonly uiscribeName="uiScribe"
+readonly uiscribeAuthor="AMTM-OSR"
+readonly uiscribeBranch="master"
+readonly uiscribeRepo="$raw_git/$uiscribeAuthor/$uiscribeName/$uiscribeBranch/${uiscribeName}.sh"
+readonly uiscribePath="$script_d/$uiscribeName"
+readonly uiscribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})"
 
 readonly header="=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=${std}\n\n"
 
@@ -258,7 +260,7 @@ finished(){ printf "$green done. $std\n"; }
 not_installed(){ printf "\n$blue %s$red NOT$white installed! $std\n" "$1"; }
 
 PressEnterTo()
-{ printf "$white Press <Enter> key to %s: $std" "$1"; read -rs inputKey; echo; }
+{ printf "$white Press <Enter> key to %s $std" "$1"; read -rs inputKey; echo; }
 
 VersionStrToNum()
 { echo "$1" | sed 's/v//; s/_/./' | awk -F. '{ printf("%d%03d%02d\n", $1, $2, $3); }'; }
@@ -506,7 +508,7 @@ update_file()
     if [ $# -gt 2 ] && [ "$3" = "backup" ]
     then date_stamp "$2"
     fi
-    cp -pf "$1" "$2"
+    cp -fp "$1" "$2"
 }
 
 # Check Yes or No #
@@ -567,7 +569,7 @@ ScriptLogo()
     printf "     (____/\`\\____)(_)   (_)(_,__/'\`\\____) \n"
     printf "     %s and %s installation $std\n" "$sng" "$lr"
     printf "%*s${green}%s${std} ${colorCT}%s${std}\n" "$spaceLenX" '' "$scribe_ver" "$branchxStr_TAG"
-    printf "     ${blue}https://github.com/AMTM-OSR/scribe${std}\n"
+    printf "      ${blue}https://github.com/AMTM-OSR/scribe${std}\n"
     printf "          ${blue}Original author: cmkelley${std}\n\n"
 }
 
@@ -850,6 +852,9 @@ _Get_LogRotate_CronHour_()
 menu_LogRotate_CronJob_Time()
 {
     local cronHourNum  cronHourStr  hourInput  validInput
+    local GRNct="\\\e[1;32m"  CLRct="\\\e[0m"  validHoursStr
+
+    validHoursStr="$(echo "$validHourLstStr" | sed -E "s/([1-9]+)/${GRNct}\1${CLRct}/g")"
 
     validInput=false
     while true
@@ -860,7 +865,7 @@ menu_LogRotate_CronJob_Time()
         printf " ${BOLD}Current $lr cron job interval: "
         printf "${green}Every ${cronHourNum} hours${CLRD}\n"
         printf "\n ${BOLD}Please enter how often in HOURS to run the cron job."
-        printf "\n Every N hours, where N is ${green}${validHourLstStr}${CLRD} "
+        printf "\n Valid values are $validHoursStr "
         printf "(${green}e${CLRD}=Exit):  "
         read -r hourInput
 
@@ -870,9 +875,8 @@ menu_LogRotate_CronJob_Time()
         elif [ -z "$hourInput" ] || \
              ! echo "$hourInput" | grep -qE "^${validHourRegExp}$"
         then
-            printf "\n ${red}Please enter a valid number:${CLRD} "
-            printf "${green}${validHourLstStr}${CLRD}\n\n"
-            PressEnterTo "continue"
+            printf "\n ${red}Please enter a valid number:${CLRD} ${validHoursStr}\n\n"
+            PressEnterTo "continue..."
         elif [ "$hourInput" -eq 24 ]
         then
             validInput=true
@@ -934,18 +938,73 @@ dir_links()
     fi
 }
 
+##-------------------------------------##
+## Added by Martinski W. [2026-Jan-03] ##
+##-------------------------------------##
+_SysLogMsgSizeFromConfig_()
+{
+    if [ $# -eq 0 ] || [ -z "$1" ]
+    then return 1
+    fi
+    local msgSizeNum  msgSizeOK=true
+
+    msgSizeNum="$(grep -m1 'log_msg_size(' "$sng_conf" | cut -d ';' -f1 | grep -oE '[0-9]+')"
+    if [ -n "$msgSizeNum" ] && [ "$msgSizeNum" -gt "$sysLogMsgSizeMAX" ]
+    then msgSizeOK=false
+    fi
+    "$msgSizeOK" && return 0
+
+    if [ "$1" = "check" ]
+    then return 1
+    elif [ "$1" = "update" ]
+    then
+        sed -i "s/log_msg_size($msgSizeNum)/log_msg_size($sysLogMsgSizeMAX)/g" "$sng_conf"
+        return 0
+    fi
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2026-Jan-03] ##
+##-------------------------------------##
+_SysLogFiFoSizeFromConfig_()
+{
+    if [ $# -eq 0 ] || [ -z "$1" ]
+    then return 1
+    fi
+    local fifoSizeNum  fifoSizeOK=true
+
+    fifoSizeNum="$(grep -m1 'log_fifo_size(' "$sng_conf" | cut -d ';' -f1 | grep -oE '[0-9]+')"
+    if [ -n "$fifoSizeNum" ] && [ "$fifoSizeNum" -lt "$sysLogFiFoSizeMIN" ]
+    then fifoSizeOK=false
+    fi
+    "$fifoSizeOK" && return 0
+
+    if [ "$1" = "check" ]
+    then return 1
+    elif [ "$1" = "update" ]
+    then
+        sed -i "s/log_fifo_size($fifoSizeNum)/log_fifo_size($sysLogFiFoSizeMIN)/g" "$sng_conf"
+        return 0
+    fi
+}
+
 ##----------------------------------------##
-## Modified by Martinski W. [2024-Aug-25] ##
+## Modified by Martinski W. [2026-Jan-03] ##
 ##----------------------------------------##
 sync_conf()
 {
+    local sng_conf_vtag1  sng_conf_vtag2  sng_version_str  sng_conf_verstr
+
     printf "$white %34s" "$( strip_path "$sng_conf" ) version check ..."
     sng_conf_vtag1="@version:"
     sng_conf_vtag2="${sng_conf_vtag1}[[:blank:]]*"
     sng_version_str="$( $sng --version | grep -m1 "$sng" | grep -oE '[0-9]{1,2}([_.][0-9]{1,2})' )"
-    sng_conf_verstr="$( grep -Em1 "$sng_conf_vtag2" "$sng_conf" | grep -oE '[0-9]{1,2}([_.][0-9]{1,2})' )"
+    sng_conf_verstr="$( grep -Em1 "^$sng_conf_vtag2" "$sng_conf" | grep -oE '[0-9]{1,2}([_.][0-9]{1,2})' )"
 
-    if [ "$sng_version_str" != "$sng_conf_verstr" ] || grep -q 'stats_freq(' "$sng_conf"
+    if grep -q 'stats_freq(' "$sng_conf"  || \
+       ! _SysLogMsgSizeFromConfig_ check  || \
+       ! _SysLogFiFoSizeFromConfig_ check || \
+       [ "$sng_version_str" != "$sng_conf_verstr" ]
     then
         printf "$red out of sync! (%s) $std\n" "$sng_conf_verstr"
         printf "$cyan *** Updating %s and restarting %s *** $std\n" "$( strip_path "$sng_conf" )" "$sng"
@@ -953,12 +1012,14 @@ sync_conf()
         old_doc="doc\/syslog-ng-open"
         new_doc="list\/syslog-ng-open-source-edition"
         sed -i "s/$old_doc.*/$new_doc/" "$sng_conf"
-        stats_freq="$( grep -m1 'stats_freq(' $sng_conf | cut -d ';' -f 1 | grep -oE '[0-9]*' )"
+        stats_freq="$( grep -m1 'stats_freq(' "$sng_conf" | cut -d ';' -f 1 | grep -oE '[0-9]*' )"
         [ -n "$stats_freq" ] && sed -i "s/stats_freq($stats_freq)/stats(freq($stats_freq))/g" "$sng_conf"
         if [ -n "$sng_version_str" ] && [ -n "$sng_conf_verstr" ]
         then
             sed -i "s/^${sng_conf_vtag2}${sng_conf_verstr}.*/$sng_conf_vtag1 $sng_version_str/" "$sng_conf"
         fi
+        _SysLogMsgSizeFromConfig_ update
+        _SysLogFiFoSizeFromConfig_ update
         $S01sng_init start
         Hup_uiScribe
         printf "$white %34s" "$( strip_path "$sng_conf" ) version ..."
@@ -1068,7 +1129,7 @@ setup_exmpls()
         dlt "$conf_opkg"
     elif [ ! -e "$share/examples/$opkg" ]
     then
-        cp -pf "$conf" "$share/examples/$opkg"
+        cp -fp "$conf" "$share/examples/$opkg"
         if [ "$1" = "$sng" ]
         then
             printf "\n$white NOTE: The %s file provided by the Entware %s package sources a very\n" "$( strip_path "$conf" )" "$sng"
@@ -1343,25 +1404,25 @@ sng_ver_chk()
     fi
 }
 
-setup_sng()
+Setup_SysLogNG()
 {
     printf "\n$magenta setting up %s ...\n$std" "$sng"
     copy_rcfunc
     sed_sng
     sed_srvcEvent
     sed_unMount
-    if [ "$( md5_file "$sng_share/examples/$sng.conf-scribe" )" != "$( md5_file "$sng_conf" )" ]
+    if [ "$( md5_file "$sng_share/examples/${sng}.conf-scribe" )" != "$( md5_file "$sng_conf" )" ]
     then
-        printf "$white %34s" "updating $( strip_path $sng_conf ) ..."
-        update_file $sng_share/examples/$sng.conf-scribe $sng_conf "backup"
+        printf "$white %34s" "updating $( strip_path "$sng_conf" ) ..."
+        update_file "$sng_share/examples/${sng}.conf-scribe" "$sng_conf" "backup"
         finished
     fi
     sync_conf
 }
 
-setup_lr()
+Setup_LogRotate()
 {
-    # assumes since entware is required / installed, post-mount exists and is properly executable
+    # Assumes since Entware is required/installed, post-mount exists and is properly executable #
     printf "\n$magenta setting up %s ...\n" "$lr"
     LogRotate_CronJob_PostMount_Check
     LogRotate_CronJob_Check
@@ -1381,8 +1442,8 @@ doInstall()
     [ "$1" = "$sng" ] && sng_ver_chk
     setup_ddir "$1" "ALL"
     setup_exmpls "$1" "ALL"
-    [ "$1" = "$sng" ] && setup_sng
-    [ "$1" = "$lr"  ] && setup_lr
+    [ "$1" = "$sng" ] && Setup_SysLogNG
+    [ "$1" = "$lr"  ] && Setup_LogRotate
 }
 
 ##----------------------------------------##
@@ -1566,7 +1627,7 @@ menu_install()
 
     rld_sngconf
     printf "\n$white %s setup complete!\n\n" "$script_name"
-    PressEnterTo "continue"
+    PressEnterTo "continue..."
     if ! "$uiScribeInstalled"
     then Install_uiScribe
     fi
@@ -1684,7 +1745,7 @@ doUninstall()
         printf "\n$white %s, %s, and %s have been removed from the system.\n" "$sng" "$lr" "$script_name"
         printf " It is recommended to reboot the router at this time.  If you do not\n"
         printf " wish to reboot the router, press ${blue}<Ctrl-C>${std} now to exit.\n\n"
-        PressEnterTo "reboot"
+        PressEnterTo "reboot:"
         service reboot; exit 0
     fi
 }
@@ -1855,7 +1916,7 @@ menu_forgrnd()
     printf "\n$yellow NOTE: If there are no errors, debugging mode will\n"
     printf "       continue indefinitely. If this happens, type\n"
     printf "       <Ctrl-C> to halt debugging mode output.\n\n"
-    PressEnterTo "start"
+    PressEnterTo "start:"
     if "$restrt"
     then $S01sng_init stop; echo
     fi
@@ -2325,7 +2386,7 @@ scribe_menu()
             printf "\n${red} Please choose a valid option.${std}\n\n"
         fi
         if "$pause"
-        then PressEnterTo "continue"
+        then PressEnterTo "continue..."
         fi
         if "$run_scribe"
         then sh "$script_loc" ; exit 0
@@ -2501,8 +2562,8 @@ case "$action" in
         lastTimeSecs="$(_ServiceEventTime_ check)"
         thisTimeDiff="$(echo "$currTimeSecs $lastTimeSecs" | awk -F ' ' '{printf("%s", $1 - $2);}')"
         
-        #Only once every 10 minutes at most#
-        if [ "$thisTimeDiff" -ge 600 ]
+        #Only once every 15 minutes at most#
+        if [ "$thisTimeDiff" -ge 900 ]
         then
             _ServiceEventTime_ update "$currTimeSecs"
             . "$rcfunc_loc"

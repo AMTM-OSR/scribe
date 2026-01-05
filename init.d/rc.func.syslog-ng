@@ -124,13 +124,6 @@ kill_logger()
         [ ! -L "$tmplog-1" ] && /bin/ln -s "${syslog_loc}-1" "${tmplog}-1"
     fi
 
-    if "$postLogMsgs"
-    then
-        $loggerCmd -t "$logTagStr" $logPrioNum "optmsg=[$(ls -ld "$optmsg")]"
-        $loggerCmd -t "$logTagStr" $logPrioNum "syslog_loc=[$(ls -ld "$syslog_loc")]"
-        $loggerCmd -t "$logTagStr" $logPrioNum "script_conf=[$(ls -ld "$script_conf")]"
-    fi
-
     # create /opt/var/run/syslog-ng/ directory if it doesn't exist #
     # not needed for older versions of syslog-ng, but doesn't hurt anything #
     [ ! -d "/opt/var/run/syslog-ng" ] && mkdir "/opt/var/run/syslog-ng"

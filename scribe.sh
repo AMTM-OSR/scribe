@@ -35,7 +35,7 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.7"
-readonly scriptVer_TAG="26010401"
+readonly scriptVer_TAG="26010422"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -45,7 +45,7 @@ export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
 # set TMP if not set #
 [ -z "${TMP:+xSETx}" ] && export TMP=/opt/tmp
 
-# parse parameters
+# parse parameters #
 action="X"
 got_zip=false
 banner=true
@@ -91,6 +91,7 @@ readonly script_conf="${config_d}/config"
 readonly optmsg="/opt/var/log/messages"
 readonly jffslog="/jffs/syslog.log"
 readonly tmplog="/tmp/syslog.log"
+syslog_loc=""
 export optmsg
 export tmplog
 export jffslog
@@ -186,7 +187,7 @@ readonly LR_FLock_FName="/tmp/scribeLogRotate.flock"
 readonly logFilesRegExp="${optVarLogDir}/.*([.]log)?"
 readonly filteredLogList="${config_d}/.filteredlogs"
 readonly noConfigLogList="${config_d}/.noconfiglogs"
-sysLogMsgSizeMAX=10240
+sysLogMsgeSizeMAX=2048
 sysLogFiFoSizeMIN=1024
 
 # color constants #
@@ -198,8 +199,9 @@ readonly magenta="\033[1;35m"
 readonly cyan="\033[1;36m"
 readonly white="\033[1;37m"
 readonly std="\e[0m"
-readonly CLRD="\e[0m"
 readonly BOLD="\e[1m"
+readonly CLRct="\e[0m"
+readonly GRNct="\e[1;32m"
 
 ##-------------------------------------##
 ## Added by Martinski W. [2025-Nov-29] ##
@@ -209,8 +211,8 @@ readonly twoMByte=2097152
 readonly LR_CronJobMins=5
 readonly LR_CronJobHour=0
 readonly LR_CronTagStr="scribeLogRotate"
-readonly validHourRegExp="(3|4|6|8|12|24)"
-readonly validHourLstStr="3, 4, 6, 8, 12, 24."
+readonly validHourRegExp="(2|3|4|6|8|12|24)"
+readonly validHourLstStr="2, 3, 4, 6, 8, 12, and 24."
 
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Jul-07] ##
@@ -222,8 +224,7 @@ readonly uiscribeBranch="master"
 readonly uiscribeRepo="$raw_git/$uiscribeAuthor/$uiscribeName/$uiscribeBranch/${uiscribeName}.sh"
 readonly uiscribePath="$script_d/$uiscribeName"
 readonly uiscribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})"
-
-readonly header="=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=${std}\n\n"
+readonly menuSepStr="${white} =*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=${CLRct}\n\n"
 
 # check if Scribe is already installed by looking for link in /opt/bin #
 [ -e "/opt/bin/$script_name" ] && scribeInstalled=true || scribeInstalled=false
@@ -851,22 +852,26 @@ _Get_LogRotate_CronHour_()
 ##-------------------------------------##
 menu_LogRotate_CronJob_Time()
 {
-    local cronHourNum  cronHourStr  hourInput  validInput
-    local GRNct="\\\e[1;32m"  CLRct="\\\e[0m"  validHoursStr
+    local GREEN="\\\e[1;32m"  CLRD="\\\e[0m"
+    local validHoursANDstr  validHoursORstr
+    local cronHourNum  cronHourStr  hourInput  inputOK  retCode
 
-    validHoursStr="$(echo "$validHourLstStr" | sed -E "s/([1-9]+)/${GRNct}\1${CLRct}/g")"
+    validHoursANDstr="$(echo "$validHourLstStr" | sed -E "s/([1-9]+)/${GREEN}\1${CLRD}/g")"
+    validHoursORstr="$(echo "$validHoursANDstr" | sed 's/and/or/')"
 
-    validInput=false
+    retCode=1
+    inputOK=false
+
     while true
     do
         ScriptLogo
-        printf "$white $header"
+        printf "$menuSepStr"
         cronHourNum="$(_Config_Option_Get_ LR_CRONJOB_HOUR)"
-        printf " ${BOLD}Current $lr cron job interval: "
-        printf "${green}Every ${cronHourNum} hours${CLRD}\n"
-        printf "\n ${BOLD}Please enter how often in HOURS to run the cron job."
-        printf "\n Valid values are $validHoursStr "
-        printf "(${green}e${CLRD}=Exit):  "
+        printf " ${BOLD}Current $lr cron job frequency: "
+        printf "${green}Every ${cronHourNum} hours${CLRct}\n"
+        printf "\n ${BOLD}Please specify how often to run the cron job."
+        printf "\n Valid values are ${validHoursANDstr}\n"
+        printf "\n Enter frequency in HOURS (${green}e${CLRct}=Exit):  "
         read -r hourInput
 
         if echo "$hourInput" | grep -qE "^[eE]$"
@@ -875,28 +880,30 @@ menu_LogRotate_CronJob_Time()
         elif [ -z "$hourInput" ] || \
              ! echo "$hourInput" | grep -qE "^${validHourRegExp}$"
         then
-            printf "\n ${red}Please enter a valid number:${CLRD} ${validHoursStr}\n\n"
+            printf "\n ${red}Please enter a valid number:${CLRct} ${validHoursORstr}\n\n"
             PressEnterTo "continue..."
         elif [ "$hourInput" -eq 24 ]
         then
-            validInput=true
+            inputOK=true
             cronHourNum="$hourInput"
             cronHourStr="$LR_CronJobHour"
             echo ; break
         else
-            validInput=true
+            inputOK=true
             cronHourNum="$hourInput"
             cronHourStr="*/$hourInput"
             echo ; break
         fi
     done
 
-    if "$validInput"
+    if "$inputOK"
     then
+        retCode=0
         _Config_Option_Update_ LR_CRONJOB_HOUR "$cronHourNum"
         _Create_LogRotate_CronJob_ "$cronHourStr"
         LogRotate_CronJob_PostMount_Create
     fi
+    return "$retCode"
 }
 
 ##----------------------------------------##
@@ -949,7 +956,7 @@ _SysLogMsgSizeFromConfig_()
     local msgSizeNum  msgSizeOK=true
 
     msgSizeNum="$(grep -m1 'log_msg_size(' "$sng_conf" | cut -d ';' -f1 | grep -oE '[0-9]+')"
-    if [ -n "$msgSizeNum" ] && [ "$msgSizeNum" -gt "$sysLogMsgSizeMAX" ]
+    if [ -n "$msgSizeNum" ] && [ "$msgSizeNum" -gt "$sysLogMsgeSizeMAX" ]
     then msgSizeOK=false
     fi
     "$msgSizeOK" && return 0
@@ -958,7 +965,7 @@ _SysLogMsgSizeFromConfig_()
     then return 1
     elif [ "$1" = "update" ]
     then
-        sed -i "s/log_msg_size($msgSizeNum)/log_msg_size($sysLogMsgSizeMAX)/g" "$sng_conf"
+        sed -i "s/log_msg_size($msgSizeNum)/log_msg_size($sysLogMsgeSizeMAX)/g" "$sng_conf"
         return 0
     fi
 }
@@ -1381,7 +1388,7 @@ _DoRotateLogFiles_()
     "$doPostRotateCleanup" && _DoPostRotateCleanup_
 }
 
-menu_status()
+Menu_Status()
 {
     check_sng
     syslogd_check
@@ -1600,7 +1607,7 @@ pre_install()
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Dec-05] ##
 ##----------------------------------------##
-menu_install()
+Menu_Install()
 {
     if [ ! -e "$sng_loc" ]
     then
@@ -1763,7 +1770,7 @@ doUninstall()
     fi
 }
 
-menu_uninstall()
+Menu_Uninstall()
 {
     andre="remove"
     uni="UN"
@@ -2086,7 +2093,7 @@ menu_restore()
                 chmod 600 "$lrd_d"/*
                 printf "\n$std Backup data has been restored from $cyan%s$std.\n" "$script_bakname"
                 menu_restart
-                menu_status
+                Menu_Status
                 ;;
             *)
                 printf "\n\n$white *** RESTORE ABORTED! ***$std\n\n"
@@ -2098,36 +2105,38 @@ menu_restore()
 ##----------------------------------------##
 ## Modified by Martinski W. [2024-Jul-07] ##
 ##----------------------------------------##
-menu_about()
+Menu_About()
 {
-    printf "About ${magenta}${SCRIPT_VERS_INFO}${std}\n"
+    printf "$menuSepStr"
+    printf " About ${magenta}${SCRIPT_VERS_INFO}${CLRct}\n"
     cat <<EOF
   $script_name replaces the firmware system logging service with
   syslog-ng (https://github.com/syslog-ng/syslog-ng/releases),
   which facilitates breaking the monolithic logfile provided by
   syslog into individualized log files based on user criteria.
 
-License
+ License
   $script_name is free to use under the GNU General Public License
   version 3 (GPL-3.0) https://opensource.org/licenses/GPL-3.0
 
-Help & Support
+ Help & Support
   https://www.snbforums.com/forums/asuswrt-merlin-addons.60/?prefix_id=7
 
-Source code
+ Source code
   https://github.com/AMTM-OSR/scribe
 EOF
-    printf "$std\n"
+    printf "${CLRct}\n"
 }
 
 ##----------------------------------------##
 ## Modified by Martinski W. [2024-Jul-07] ##
 ##----------------------------------------##
-menu_help()
+Menu_Help()
 {
-    printf "HELP ${magenta}${SCRIPT_VERS_INFO}${std}\n"
+    printf "$menuSepStr"
+    printf " HELP ${magenta}${SCRIPT_VERS_INFO}${CLRct}\n"
     cat <<EOF
-Available commands:
+ Available commands:
   $script_name about                explains functionality
   $script_name install              installs script
   $script_name remove / uninstall   uninstalls script
@@ -2142,36 +2151,39 @@ Available commands:
   $script_name stable               switch to stable/production branch version
   $script_name help                 displays this help
 EOF
-    printf "$std\n"
+    printf "${CLRct}\n"
 }
 
-ut_menu()
+##----------------------------------------##
+## Modified by Martinski W. [2025-Jan-04] ##
+##----------------------------------------##
+Utils_Menu()
 {
-    printf "$magenta           %s Utilities ${std}\n\n" "$script_name"
-    printf "     bu.   Backup configuration files\n"
-    printf "     rt.   Restore configuration files\n\n"
-    printf "      d.   Generate debug file\n"
-    printf "     rd.   Re-detect syslog.log location\n"
-    printf "      c.   Check on-disk %s config\n" "$sng"
+    printf "$magenta        %s Utilities ${CLRct}\n\n" "$script_name"
+    printf "    ${GRNct}bu${CLRct}. Backup configuration files\n"
+    printf "    ${GRNct}rt${CLRct}. Restore configuration files\n\n"
+    printf "     ${GRNct}d${CLRct}. Generate debug file\n"
+    printf "    ${GRNct}rd${CLRct}. Re-detect syslog.log location\n"
+    printf "     ${GRNct}c${CLRct}. Check on-disk %s config\n" "$sng"
     if SyslogNg_Running
     then
-        printf "     lc.   Show loaded %s config\n" "$sng"
+        printf "    ${GRNct}lc${CLRct}. Show loaded %s config\n" "$sng"
     fi
-    printf "     sd.   Run %s debugging mode\n" "$sng"
-    printf "     ld.   Show %s debug info\n\n" "$lr"
-    printf "     ui.   "
+    printf "    ${GRNct}sd${CLRct}. Run %s debugging mode\n" "$sng"
+    printf "    ${GRNct}ld${CLRct}. Show %s debug info\n\n" "$lr"
+    printf "    ${GRNct}ui${CLRct}. "
     if "$uiScribeInstalled"
     then printf "Run"
     else printf "Install"
     fi
     printf " %s\n" "$uiscribeName"
-    printf "      e.   Exit to Main Menu\n"
+    printf "     ${GRNct}e${CLRct}. Exit to Main Menu\n"
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2024-Jul-07] ##
+## Modified by Martinski W. [2025-Jan-04] ##
 ##----------------------------------------##
-main_menu()
+Main_Menu()
 {
     and_lr=" & $lr cron"
     if SyslogNg_Running
@@ -2184,38 +2196,38 @@ main_menu()
     fi
     if "$scribeInstalled"
     then
-        printf "      s.   Show %s status\n" "$script_name"
+        printf "     ${GRNct}s${CLRct}. Show %s status\n" "$script_name"
         if SyslogNg_Running
         then
-            printf "     rl.   Reload %s.conf\n" "$sng"
+            printf "    ${GRNct}rl${CLRct}. Reload %s.conf\n" "$sng"
         fi
-        printf "     lr.   Run logrotate now\n"
-        printf "     rs.   %start %s" "$res" "$sng"
+        printf "    ${GRNct}lr${CLRct}. Run logrotate now\n"
+        printf "    ${GRNct}rs${CLRct}. %start %s" "$res" "$sng"
         if ! SyslogNg_Running
         then
             printf "${and_lr}\n"
         else
-            printf "\n     st.   Stop %s${and_lr}" "$sng"
-            printf "\n     ct.   Set $lr cron job time interval\n"
+            printf "\n    ${GRNct}st${CLRct}. Stop %s${and_lr}" "$sng"
+            printf "\n    ${GRNct}ct${CLRct}. Set $lr cron job run frequency\n"
         fi
         if SyslogNg_Running
         then
             echo
-            printf "      u.   Check for script updates\n"
-            printf "     uf.   Force update %s with latest version\n" "$script_name"
-            printf "     ft.   Update filters\n"
+            printf "     ${GRNct}u${CLRct}. Check for script updates\n"
+            printf "    ${GRNct}uf${CLRct}. Force update %s with latest version\n" "$script_name"
+            printf "    ${GRNct}ft${CLRct}. Update filters\n"
         fi
-        printf "     su.   %s utilities\n" "$script_name"
+        printf "    ${GRNct}su${CLRct}. %s utilities\n" "$script_name"
     fi
-    printf "      e.   Exit %s\n\n" "$script_name"
-    printf "     is.   %snstall %s\n" "$ins" "$script_name" 
-    printf "     zs.   Remove %s\n" "$script_name"
+    printf "     ${GRNct}e${CLRct}. Exit %s\n\n" "$script_name"
+    printf "    ${GRNct}is${CLRct}. %snstall %s\n" "$ins" "$script_name" 
+    printf "    ${GRNct}zs${CLRct}. Remove %s\n" "$script_name"
 }
 
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Dec-05] ##
 ##----------------------------------------##
-scribe_menu()
+Scribe_Menu()
 {
     while true
     do
@@ -2223,16 +2235,16 @@ scribe_menu()
         not_recog=false
         run_scribe=false
         ScriptLogo
-        printf "$white $header"
+        printf "$menuSepStr"
         case "$menu_type" in
             utils)
-                ut_menu
+                Utils_Menu
                 ;;
             *)
-                main_menu
+                Main_Menu
                 ;;
         esac
-        printf "\n$white $header"
+        printf "\n$menuSepStr"
         printf "$magenta Please select an option: $std"
         read -r choice
 
@@ -2243,7 +2255,7 @@ scribe_menu()
         then
             case "$choice" in
                 s)
-                    menu_status
+                    Menu_Status
                     ;;
                 rl)
                     if SyslogNg_Running
@@ -2265,7 +2277,7 @@ scribe_menu()
                     ;;
                 rs)
                     menu_restart
-                    menu_status
+                    Menu_Status
                     ;;
                 st)
                     if SyslogNg_Running
@@ -2279,6 +2291,7 @@ scribe_menu()
                     if SyslogNg_Running
                     then
                         menu_LogRotate_CronJob_Time
+                        [ $? -ne 0 ] && pause=false
                     else
                         not_recog=true
                     fi
@@ -2370,20 +2383,20 @@ scribe_menu()
                     if "$scribeInstalled"
                     then
                         reinst=true
-                        menu_uninstall
+                        Menu_Uninstall
                     fi
                     if "$do_inst"
                     then
                         pre_install
                         Get_ZIP_File
-                        menu_install
+                        Menu_Install
                         sh "$script_loc" status nologo
                         run_scribe=true
                     fi
                     ;;
                 zs)
                     reinst=false
-                    menu_uninstall
+                    Menu_Uninstall
                     ;;
                 *)
                     not_recog=true
@@ -2436,7 +2449,7 @@ fi
 if [ "$action" = "menu" ]
 then
     menu_type="main"
-    scribe_menu
+    Scribe_Menu
 elif ! echo "$action" | grep -q '^LogRotate'
 then
     ScriptLogo
@@ -2448,11 +2461,11 @@ fi
 cliParamCheck=true
 case "$action" in
     about)
-        menu_about
+        Menu_About
         cliParamCheck=false
         ;;
     help)
-        menu_help
+        Menu_Help
         cliParamCheck=false
         ;;
     install)
@@ -2464,13 +2477,13 @@ case "$action" in
         fi
         pre_install
         Get_ZIP_File
-        menu_install
+        Menu_Install
         sh "$script_loc" status nologo
         exit 0
         ;;
     uninstall | remove)
         reinst=false
-        menu_uninstall
+        Menu_Uninstall
         ;;
     update)
         Update_Version
@@ -2500,7 +2513,7 @@ case "$action" in
     #verify syslog-ng is running and logrotate is listed in 'cru l'#
     status)
         if "$scribeInstalled"
-        then menu_status
+        then Menu_Status
         fi
         ;;
 
@@ -2516,7 +2529,7 @@ case "$action" in
         if "$scribeInstalled"
         then
             menu_restart
-            menu_status
+            Menu_Status
         fi
         ;;
 

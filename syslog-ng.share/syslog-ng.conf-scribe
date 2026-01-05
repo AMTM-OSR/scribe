@@ -15,7 +15,7 @@ options {
     create_dirs(yes);
     keep_hostname(yes); # Enable or disable hostname rewriting.
     log_fifo_size(1024); # The number of messages that the output queue can store.
-    log_msg_size(10240); # Maximum length of a message in bytes.
+    log_msg_size(2048); # Maximum length of a message in bytes.
     stats(freq(21600)); # The period between two STATS messages sent by syslog-ng, containing statistics about dropped logs in seconds; 0 disables. (21,600 seconds = 6 hours)
     flush_lines(0); # How many lines are flushed to a destination at a time.
     use_fqdn(no); # Add Fully Qualified Domain Name instead of short hostname.

@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Jan-04
+# Last Modified: 2026-Jan-05
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -35,7 +35,7 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.7"
-readonly scriptVer_TAG="26010422"
+readonly scriptVer_TAG="26010522"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -1021,7 +1021,9 @@ sync_conf()
         sed -i "s/$old_doc.*/$new_doc/" "$sng_conf"
         stats_freq="$( grep -m1 'stats_freq(' "$sng_conf" | cut -d ';' -f 1 | grep -oE '[0-9]*' )"
         [ -n "$stats_freq" ] && sed -i "s/stats_freq($stats_freq)/stats(freq($stats_freq))/g" "$sng_conf"
-        if [ -n "$sng_version_str" ] && [ -n "$sng_conf_verstr" ]
+        if [ -n "$sng_version_str" ] && \
+           [ -n "$sng_conf_verstr" ] && \
+           [ "$sng_version_str" != "$sng_conf_verstr" ]
         then
             sed -i "s/^${sng_conf_vtag2}${sng_conf_verstr}.*/$sng_conf_vtag1 $sng_version_str/" "$sng_conf"
         fi

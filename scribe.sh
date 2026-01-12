@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Jan-05
+# Last Modified: 2026-Jan-11
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -35,32 +35,35 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.7"
-readonly scriptVer_TAG="26010522"
+readonly scriptVer_TAG="26011122"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
 # Ensure firmware binaries are used, not Entware #
 export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
 
-# set TMP if not set #
+# Set TMP if not set #
 [ -z "${TMP:+xSETx}" ] && export TMP=/opt/tmp
 
-# parse parameters #
+# Parse parameters #
 action="X"
 got_zip=false
 banner=true
+usbUnmountCaller=false
+
 [ "${SCRIBE_LOGO:=xFALSEx}" = "nologo" ] && banner=false
 
 while { [ $# -gt 0 ] && [ -n "$1" ] ; }
 do
     case "$1" in
         gotzip)
-            got_zip=true
-            shift
+            got_zip=true ; shift
             ;;
         nologo)
-            banner=false
-            shift
+            banner=false ; shift
+            ;;
+        unmount)
+            usbUnmountCaller=true ; shift
             ;;
         service_event | LogRotate)
             banner=false
@@ -68,8 +71,7 @@ do
             break
             ;;
         *)
-            action="$1"
-            shift
+            action="$1" ; shift
             ;;
     esac
 done
@@ -170,6 +172,7 @@ readonly div_req="4.1"
 ## Added by Martinski W. [2025-Dec-05] ##
 ##-------------------------------------##
 readonly HOMEdir="/home/root"
+readonly TEMPdir="/tmp/var/tmp"
 readonly optTempDir="/opt/tmp"
 readonly optVarLogDir="/opt/var/log"
 readonly syslogNgStr="syslog-ng"
@@ -187,7 +190,10 @@ readonly LR_FLock_FName="/tmp/scribeLogRotate.flock"
 readonly logFilesRegExp="${optVarLogDir}/.*([.]log)?"
 readonly filteredLogList="${config_d}/.filteredlogs"
 readonly noConfigLogList="${config_d}/.noconfiglogs"
-sysLogMsgeSizeMAX=2048
+readonly syslogNg_WaitnSEM_FPath="${TEMPdir}/scribe_SysLogNg.WAITN.SEM"
+readonly syslogNg_StartSEM_FPath="${TEMPdir}/scribe_SysLogNg.START.SEM"
+readonly sysLogLinesMAX=20480
+readonly sysLogMsgeSizeMAX=2048
 sysLogFiFoSizeMIN=1024
 
 # color constants #
@@ -226,13 +232,13 @@ readonly uiscribePath="$script_d/$uiscribeName"
 readonly uiscribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})"
 readonly menuSepStr="${white} =*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=${CLRct}\n\n"
 
-# check if Scribe is already installed by looking for link in /opt/bin #
+# Check if Scribe is already installed by looking for link in /opt/bin #
 [ -e "/opt/bin/$script_name" ] && scribeInstalled=true || scribeInstalled=false
 
-# check if uiScribe is installed #
+# Check if uiScribe is installed #
 [ -e "$uiscribePath" ] && uiScribeInstalled=true || uiScribeInstalled=false
 
-# check if Skynet is installed
+# Check if Skynet is installed
 if [ -e "$fire_start" ] && grep -q "skynetloc" "$fire_start"
 then
     skynet_inst=true
@@ -266,19 +272,19 @@ PressEnterTo()
 VersionStrToNum()
 { echo "$1" | sed 's/v//; s/_/./' | awk -F. '{ printf("%d%03d%02d\n", $1, $2, $3); }'; }
 
-md5_file(){ md5sum "$1" | awk '{ printf( $1 ); }'; } # get md5sum of file
+md5_file(){ md5sum "$1" | awk '{ printf( $1 ); }'; }
 
 strip_path(){ basename "$1"; }
 
-dlt(){ rm -rf "$1"; }
+delfr(){ rm -fr "$1"; }
 
 same_same(){ if [ "$( md5_file "$1" )" = "$( md5_file "$2" )" ]; then true; else false; fi; }
 
-date_stamp(){ [ -e "$1" ] && mv "$1" "$1-$( date -Iseconds | cut -c 1-19 )"; }
+date_stamp(){ [ -e "$1" ] && mv -f "$1" "$1-$( date -Iseconds | cut -c 1-19 )"; }
 
 SyslogNg_Running(){ if [ -n "$( pidof $sng )" ]; then true; else false; fi; }
 
-SyslogDm_Running(){ if [ -n "$( pidof $sld )" ]; then true; else false; fi; }
+SyslogD_Running(){ if [ -n "$( pidof $sld )" ]; then true; else false; fi; }
 
 ##-------------------------------------##
 ## Added by Martinski W. [2025-Nov-30] ##
@@ -292,27 +298,41 @@ _GetFileSize_()
    return 0
 }
 
-# NB: ensure system log is backed up before doing this!
-clear_loglocs()
+##----------------------------------------##
+## Modified by Martinski W. [2026-Jan-10] ##
+##----------------------------------------##
+Clear_Syslog_Links()
 {
-    dlt $tmplog
-    dlt $tmplog-1
-    dlt $jffslog
-    dlt $jffslog-1
+    if [ -L "$tmplog" ]
+    then delfr "$tmplog"
+    fi
+    if [ -L "${tmplog}-1" ]
+    then delfr "${tmplog}-1"
+    fi
+    if [ -L "$jffslog" ] || [ -d "$jffslog" ]
+    then delfr "$jffslog"
+    fi
+    if [ -L "${jffslog}-1" ] || [ -d "${jffslog}-1" ]
+    then delfr "${jffslog}-1"
+    fi
 }
 
-start_syslogd()
+##----------------------------------------##
+## Modified by Martinski W. [2026-Jan-10] ##
+##----------------------------------------##
+Start_SyslogD()
 {
     service start_logger
-    count=30
-    while ! SyslogDm_Running && [ "$count" -gt 0 ]
+
+    "$usbUnmountCaller" && count=5 || count=30
+    while ! SyslogD_Running && [ "$count" -gt 0 ]
     do
-        sleep 1 # give syslogd time to start up #
+        sleep 1  #Give syslogd time to start up#
         count="$(( count - 1 ))"
     done
-    if [ "$count" -eq 0 ]
+    if [ "$count" -eq 0 ] && ! "$usbUnmountCaller"
     then
-        printf "\n$red UNABLE TO START SYSLOGD! ABORTING!\n$std"
+        printf "\n ${red}UNABLE to start syslogd. ABORTING!!${std}\n"
         exit 1
     fi
 }
@@ -418,7 +438,7 @@ _Config_Option_Check_()
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Nov-29] ##
 ##----------------------------------------##
-where_syslogd()
+Where_SyslogD()
 {
     local findStr
     if [ -n "$(pidof syslogd)" ]
@@ -429,63 +449,62 @@ where_syslogd()
             syslog_loc="$(echo "$findStr" | awk -F' ' '{print $2}')"
         fi
     fi
-    [ -n "$syslog_loc" ] && \
-    _Config_Option_Update_ SYSLOG_LOC "$syslog_loc"
+    [ -n "$syslog_loc" ] && _Config_Option_Update_ SYSLOG_LOC "$syslog_loc"
 }
 
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Nov-30] ##
 ##----------------------------------------##
-create_conf()
+Create_Config()
 {
     printf "\n$white Detecting default syslog location... "
     if SyslogNg_Running
     then
         slg_was_rng=true
         printf "\n Briefly shutting down %s" "$sng"
-        killall -q $sng 2>/dev/null
+        killall -q "$sng" 2>/dev/null
         count=10
         while SyslogNg_Running && [ "$count" -gt 0 ]
         do
             sleep 1
             count="$(( count - 1 ))"
         done
-        clear_loglocs
+        Clear_Syslog_Links
     else
         slg_was_rng=false
     fi
 
-    if ! SyslogDm_Running
-    then start_syslogd
+    if ! SyslogD_Running
+    then Start_SyslogD
     fi
-    where_syslogd
+    Where_SyslogD
 
     if "$slg_was_rng"
     then
-        # if syslog-ng was running, kill syslogd and restart #
+        # If syslog-ng was running, kill syslogd and restart #
         $S01sng_init start
     elif [ -x "$sng_loc" ] && [ -x "$lr_loc" ] && \
          [ -d "$lrd_d" ] && [ -n "$syslog_loc" ] && \
          [ -s "$syslog_loc" ] && [ ! -L "$syslog_loc" ]
     then
-        # prepend /opt/var/messages to syslog & create link #
+        # Prepend /opt/var/messages to syslog & create link #
         cat "$syslog_loc" >> "$optmsg"
         mv -f "$optmsg" "$syslog_loc"
         ln -s "$syslog_loc" "$optmsg"
     fi
-    # assume uiScribe is still running if it was before stopping syslog-ng #
+    # Assume uiScribe is still running if it was before stopping syslog-ng #
 }
 
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Nov-29] ##
 ##----------------------------------------##
-read_conf()
+Read_Config()
 {
     if [ -s "$script_conf" ] && grep -q "^SYSLOG_LOC=" "$script_conf"
     then
         syslog_loc="$(_Config_Option_Get_ SYSLOG_LOC)"
     else
-        create_conf
+        Create_Config
     fi
     export syslog_loc
 
@@ -555,7 +574,7 @@ _CenterTextStr_()
 ##----------------------------------------##
 ScriptLogo()
 {
-    if ! $banner
+    if ! "$banner"
     then return 0
     fi
     local spaceLenT=45  spaceLenX=5  colorCT
@@ -589,8 +608,8 @@ Get_ZIP_File()
 {
     if ! $got_zip
     then
-        dlt "$unzip_dirPath"
-        dlt "$script_zip_file"
+        delfr "$unzip_dirPath"
+        delfr "$script_zip_file"
         printf "\n$white Fetching %s from GitHub %s branch ...$std\n" "$script_name" "$script_branch"
         if curl -fL --retry 4 --retry-delay 5 --retry-connrefused "$script_repo_ZIP" -o "$script_zip_file"
         then
@@ -605,24 +624,24 @@ Get_ZIP_File()
     fi
 }
 
-Hup_uiScribe()
+Restart_uiScribe()
 {
     if "$uiScribeInstalled"
     then
-        printf "$white Restarting $uiscribeName ...\n"
+        printf "\n$white Restarting ${uiscribeName}...\n"
         $uiscribePath startup
     fi
 }
 
-rld_sngconf()
+Reload_sngconf()
 {
     printf "$white reloading %s ... $cyan" "$( strip_path $sng_conf )"
     $sngctl_loc reload
     printf "\n$std"
-    Hup_uiScribe
+    Restart_uiScribe
 }
 
-copy_rcfunc()
+Copy_rcfunc()
 {
     printf "$white copying %s to %s ...$std" "$rcfunc_sng" "$init_d"
     cp -pf "$unzip_dirPath/init.d/$rcfunc_sng" "$init_d/"
@@ -630,35 +649,62 @@ copy_rcfunc()
     finished
 }
 
-check_sng()
+##-------------------------------------##
+## Added by Martinski W. [2026-Jan-11] ##
+##-------------------------------------##
+_ShowSysLogNg_WaitStart_Msge_()
+{
+    local waitSecs=180
+    if [ -s "$syslogNg_WaitnSEM_FPath" ]
+    then waitSecs="$(head -n1 "$syslogNg_WaitnSEM_FPath")"
+    fi
+    printf " ${magenta}NOTICE:\n -------${CLRct}\n"
+    printf " ${yellow}%s will start in about ${GRNct}%d${yellow} seconds...\n" "$sng" "$waitSecs"
+    printf " Please wait until %s has been started.${CLRct}\n\n" "$sng"
+}
+
+##----------------------------------------##
+## Modified by Martinski W. [2026-Jan-11] ##
+##----------------------------------------##
+Check_SysLogNg()
 {
     printf "\n$white %34s" "checking $sng daemon ..."
     if SyslogNg_Running
     then
-        printf "$green alive. $std\n"
+        printf " ${green}alive.${std}\n"
     else
-        printf "$red dead. $std\n"
-        printf "$white %34s" "the system logger (syslogd) ..."
-        if SyslogDm_Running
+        printf " ${red}dead.${std}\n"
+        if [ -f "$syslogNg_WaitnSEM_FPath" ]
         then
-            printf "$green is running. $std\n\n"
-            printf "$yellow    Type$red %s restart$yellow at shell prompt or select$red rs$yellow\n" "$script_name"
-            printf "    from %s main menu to start %s.\n" "$script_name" "$sng"
+            echo ; _ShowSysLogNg_WaitStart_Msge_
+        fi
+        printf "$white %34s" "the system logger (syslogd) ..."
+        if SyslogD_Running
+        then
+            printf " ${green}is running.${std}\n\n"
+            if [ ! -f "$syslogNg_WaitnSEM_FPath" ]
+            then
+                printf "    ${yellow}Type ${green}%s restart${yellow} at shell prompt or select ${green}rs${std}\n" "$script_name"
+                printf "    ${yellow}from %s main menu to start %s.${std}\n\n" "$script_name" "$sng"
+            fi
         else
-            printf "$red is not running! $std\n\n"
-            printf "$white    Type$red %s -Fevd$white at shell prompt or select$red sd$white\n" "$sng"
-            printf "    from %s utilities menu ($red%s$white) to view %s\n" "$script_name" "su" "$sng" 
-            printf "    debugging data.\n"
+            printf " ${red}is NOT running!${std}\n\n"
+            if [ ! -f "$syslogNg_WaitnSEM_FPath" ]
+            then
+                printf "    ${yellow}Type ${green}%s -Fevd${yellow} at shell prompt or select '${green}sd${std}'\n" "$sng"
+                printf "    ${yellow}from %s utilities menu ('${green}su${yellow}' option) to view %s\n" "$script_name" "$sng" 
+                printf "    debugging information.${std}\n\n"
+            fi
         fi
     fi
 }
 
-sed_sng()
+sed_SysLogNg_Init()
 {
     printf "$white %34s" "checking $( strip_path "$S01sng_init" ) ..."
     if ! grep -q "$rcfunc_sng" "$S01sng_init"
     then
-        sed -i "\~/opt/etc/init.d/rc.func$~i . $rcfunc_loc # added by $script_name\n" "$S01sng_init"
+        sed -i "\~/opt/etc/init.d/rc.func$~i . $rcfunc_loc #${script_name}#\n" "$S01sng_init"
         updated
     else
         present
@@ -672,7 +718,7 @@ rd_warn(){
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Nov-29] ##
 ##----------------------------------------##
-syslogd_check()
+SysLogd_Check()
 {
     local checksys_loc
 
@@ -715,9 +761,9 @@ sed_srvcEvent()
         if grep -q "$script_name kill_logger" "$srvcEvent"
         then sed -i "/$script_name kill_logger/d" "$srvcEvent"
         fi
-        if ! grep -q "$script_name service_event" "$srvcEvent"
+        if ! grep -q "^$script_loc service_event" "$srvcEvent"
         then
-            echo "$script_loc service_event \"\$@\" & # added by $script_name" >> "$srvcEvent"
+            echo "$script_loc service_event \"\$@\" & #${script_name}#" >> "$srvcEvent"
             updated
         else
             present
@@ -725,7 +771,7 @@ sed_srvcEvent()
     else
         {
             echo "#!/bin/sh -" ; echo
-            echo "$script_loc service_event \"\$@\" & # added by $script_name"
+            echo "$script_loc service_event \"\$@\" & #${script_name}#"
         } > "$srvcEvent"
         printf "$green created. $std\n"
     fi
@@ -790,15 +836,23 @@ LogRotate_CronJob_PostMount_Check()
     [ -f /var/lib/logrotate.status ] && chmod 600 /var/lib/logrotate.status
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2026-Jan-10] ##
+##----------------------------------------##
 sed_unMount()
 {
     printf "$white %34s" "checking $( strip_path "$unMount" ) ..."
     if [ -f "$unMount" ]
     then
         [ "$( grep -c "#!/bin/sh" "$unMount" )" -ne 1 ] && sed -i "1s~^~#!/bin/sh -\n\n~" "$unMount"
-        if ! grep -q "$script_name stop" "$unMount"
+
+        if grep -q " && $script_name stop nologo" "$unMount"
         then
-            echo "[ \"\$(find \$1/entware*/bin/$script_name 2> /dev/null)\" ] && $script_name stop nologo # added by $script_name" >> "$unMount"
+            sed -i "/&& $script_name stop nologo/d" "$unMount" 
+        fi
+        if ! grep -q "&& $script_loc stop nologo unmount" "$unMount"
+        then
+            echo "[ \"\$(find \"\${1}/entware/bin/$script_name\" 2>/dev/null)\" ] && $script_loc stop nologo unmount #${script_name}#" >> "$unMount"
             updated
         else
             present
@@ -806,7 +860,7 @@ sed_unMount()
     else
         {
             echo "#!/bin/sh" ; echo
-            echo "[ \"\$(find \$1/entware*/bin/$script_name 2> /dev/null)\" ] && $script_name stop nologo # added by $script_name"
+            echo "[ \"\$(find \"\${1}/entware/bin/$script_name\" 2>/dev/null)\" ] && $script_loc stop nologo unmount #${script_name}#"
         } > "$unMount"
         printf "$green created. $std\n"
     fi
@@ -926,7 +980,7 @@ LogRotate_CronJob_Check()
     fi
 }
 
-dir_links()
+Check_Dir_Links()
 {
     printf "$white %34s" "checking directory links ..."
     if [ ! -L "$syslog_loc" ] || [ ! -d "/opt/var/run/syslog-ng" ]
@@ -938,7 +992,7 @@ dir_links()
         # shellcheck source=/opt/etc/init.d/rc.func.syslog-ng
         #################################################################
         . "$rcfunc_loc"
-        kill_logger
+        kill_logger true
         updated
     else
         present
@@ -998,7 +1052,7 @@ _SysLogFiFoSizeFromConfig_()
 ##----------------------------------------##
 ## Modified by Martinski W. [2026-Jan-03] ##
 ##----------------------------------------##
-sync_conf()
+SysLogNg_Config_Sync()
 {
     local sng_conf_vtag1  sng_conf_vtag2  sng_version_str  sng_conf_verstr
 
@@ -1030,7 +1084,7 @@ sync_conf()
         _SysLogMsgSizeFromConfig_ update
         _SysLogFiFoSizeFromConfig_ update
         $S01sng_init start
-        Hup_uiScribe
+        Restart_uiScribe
         printf "$white %34s" "$( strip_path "$sng_conf" ) version ..."
         printf "$yellow updated! (%s) $std\n" "$sng_version_str"
         logger -t "$script_name" "$( strip_path "$sng_conf" ) version number updated ($sng_version_str)!"
@@ -1039,7 +1093,7 @@ sync_conf()
     fi
 }
 
-sng_syntax()
+SysLogNg_Config_SyntaxCheck()
 {
     printf "$white %34s" "$( strip_path "$sng_conf" ) syntax check ..."
     if $sng_loc -s >> /dev/null 2>&1
@@ -1055,7 +1109,7 @@ get_vers()
 {
     # only get scribe from github once #
     script_md5="$( md5_file "$script_loc")"
-    dlt "$script_tmp_file"
+    delfr "$script_tmp_file"
     curl -LSs --retry 4 --retry-delay 5 --retry-connrefused "$script_repoFile" -o "$script_tmp_file"
     [ ! -e "$script_tmp_file" ] && \
     printf "\n\n$white %s GitHub repository is unavailable! -- $red ABORTING! $std\n\n" "$script_name" && exit 1
@@ -1068,7 +1122,7 @@ get_vers()
     elif [ "$( VersionStrToNum "$github_ver" )" -gt "$( VersionStrToNum "$scribe_ver" )" ]; then new_vers="major"
     elif [ "$script_md5" != "$github_md5" ]; then new_vers="minor"
     fi
-    dlt "$script_tmp_file"
+    delfr "$script_tmp_file"
 }
 
 prt_vers()
@@ -1135,7 +1189,7 @@ setup_exmpls()
     if [ -e "$conf_opkg" ]
     then
         update_file "$conf_opkg" "$share/examples/$opkg" "backup"
-        dlt "$conf_opkg"
+        delfr "$conf_opkg"
     elif [ ! -e "$share/examples/$opkg" ]
     then
         cp -fp "$conf" "$share/examples/$opkg"
@@ -1151,7 +1205,7 @@ setup_exmpls()
     printf "$std"
 }
 
-force_install()
+Force_Install()
 {
     printf "\n$blue %s$white already installed!\n" "$1"
     [ "$1" != "$script_name" ] && printf "$yellow Forcing installation$red WILL OVERWRITE$yellow any modified configuration files!\n"
@@ -1160,12 +1214,12 @@ force_install()
     return $?
 }
 
-show_config()
+SysLogNg_ShowConfig()
 {
     if [ -e "$sng_loc" ]
     then
-        dlt "$sngconf_merged"
-        dlt "$sngconf_error"
+        delfr "$sngconf_merged"
+        delfr "$sngconf_error"
         if $sng_loc --preprocess-into="$sngconf_merged" 2> "$sngconf_error"
         then
             less "$sngconf_merged"
@@ -1181,7 +1235,7 @@ show_config()
 
 show_loaded()
 {
-    dlt "$sngconf_merged"
+    delfr "$sngconf_merged"
     $sngctl_loc config --preprocessed > "$sngconf_merged"
     less "$sngconf_merged"
 }
@@ -1392,10 +1446,10 @@ _DoRotateLogFiles_()
 
 Menu_Status()
 {
-    check_sng
-    syslogd_check
+    Check_SysLogNg
+    SysLogd_Check
     printf "\n$magenta checking system for necessary %s hooks ...\n\n" "$script_name"
-    sed_sng
+    sed_SysLogNg_Init
     if SyslogNg_Running
     then sed_srvcEvent
     fi
@@ -1404,11 +1458,11 @@ Menu_Status()
     if SyslogNg_Running
     then
         LogRotate_CronJob_Check
-        dir_links
+        Check_Dir_Links
     fi
     printf "\n$magenta checking %s configuration ...\n\n" "$sng"
-    sync_conf
-    sng_syntax
+    SysLogNg_Config_Sync
+    SysLogNg_Config_SyntaxCheck
     get_vers
     prt_vers
 }
@@ -1429,8 +1483,8 @@ sng_ver_chk()
 Setup_SysLogNG()
 {
     printf "\n$magenta setting up %s ...\n$std" "$sng"
-    copy_rcfunc
-    sed_sng
+    Copy_rcfunc
+    sed_SysLogNg_Init
     sed_srvcEvent
     sed_unMount
     if [ "$( md5_file "$sng_share/examples/${sng}.conf-scribe" )" != "$( md5_file "$sng_conf" )" ]
@@ -1439,7 +1493,7 @@ Setup_SysLogNG()
         update_file "$sng_share/examples/${sng}.conf-scribe" "$sng_conf" "backup"
         finished
     fi
-    sync_conf
+    SysLogNg_Config_Sync
 }
 
 Setup_LogRotate()
@@ -1453,7 +1507,7 @@ Setup_LogRotate()
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Aug-23] ##
 ##----------------------------------------##
-doInstall()
+Do_Install()
 {
     forceOpt=""
     if [ $# -gt 1 ] && [ "$2" = "FORCE" ]
@@ -1471,7 +1525,7 @@ doInstall()
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Jun-09] ##
 ##----------------------------------------##
-setup_Scribe()
+Setup_Scribe()
 {
     printf "\n$white setting up %s ...\n" "$script_name"
     cp -fp "$unzip_dirPath/${script_name}.sh" "$script_loc"
@@ -1481,8 +1535,8 @@ setup_Scribe()
     # Install correct firewall or skynet file, these are mutually exclusive #
     if "$skynet_inst"
     then
-        dlt "$sngd_d/firewall"
-        dlt "$lrd_d/firewall"
+        delfr "$sngd_d/firewall"
+        delfr "$lrd_d/firewall"
         if [ ! -e "$sngd_d/skynet" ] || [ "$1" = "ALL" ]
         then
             printf "$white installing %s Skynet filter ...\n" "$sng"
@@ -1492,8 +1546,8 @@ setup_Scribe()
         skynetlog="$( grep -m1 'file("' $sngd_d/skynet | awk -F\" '{ printf ( $2 ); }'; )"
         sh $skynet settings syslog "$skynetlog" > /dev/null 2>&1
     else
-        dlt "$sngd_d/skynet"
-        dlt "$lrd_d/skynet"
+        delfr "$sngd_d/skynet"
+        delfr "$lrd_d/skynet"
         if [ ! -e "$sngd_d/firewall" ] || [ "$1" = "ALL" ]
         then
             printf "$white installing %s firewall filter ...\n" "$sng"
@@ -1535,21 +1589,21 @@ Uninstall_uiScribe()
     fi
 }
 
-pre_install()
+PreInstall_Check()
 {
-    # check for required components
-    okay=true
+    # Check for required components #
+    reqsOK=true
 
-    # check if Entware & ASUSWRT-Merlin are installed and Merlin version number #
+    # Check if Entware & ASUSWRT-Merlin are installed and Merlin version number #
     if [ ! -x "/opt/bin/opkg" ]   || \
        [ "$fwName" != "$wrtMerlin" ] || \
        [ "$( VersionStrToNum "$fwVerBuild" )" -lt "$( VersionStrToNum "$fwVerReqd" )" ]
     then
         printf "\n\n$red %s version %s or later with Entware is required! $std\n" "$wrtMerlin" "$fwVerReqd"
-        okay=false
+        reqsOK=false
     fi
 
-    # check if diversion is installed and version number
+    # Check if diversion is installed and version number #
     if [ -x "$divers" ]
     then
         printf "\n\n$white Diversion detected, checking version ..."
@@ -1559,7 +1613,7 @@ pre_install()
         then
             printf "$red update required!\n"
             printf " Diversion %s or later is required! $std\n" "$div_req"
-            okay=false
+            reqsOK=false
         else
             printf "$green okay! $std\n"
         fi
@@ -1575,7 +1629,7 @@ pre_install()
         then
             printf "$red update required!\n"
             printf " Skynet %s or later is required! $std\n" "$sky_req"
-            okay=false
+            reqsOK=false
         else
             printf "$green okay! $std\n"
         fi
@@ -1587,21 +1641,21 @@ pre_install()
         printf " If Skynet is installed after %s, run \"%s install\"\n" "$script_name" "$script_name"
         printf " and force installation to configure %s and Skynet\n" "$script_name"
         printf " to work together.\n\n"
-        if $okay
+        if "$reqsOK"
         then
             printf " Do you want to continue installation of %s [y|n]? $std" "$script_name"
             if ! yes_no
             then
-                okay=false
+                reqsOK=false
             fi
         fi
     fi
 
-    # exit if requirements not met #
-    if ! "$okay"
+    # Exit if requirements NOT met #
+    if ! "$reqsOK"
     then
         printf "\n\n$magenta exiting %s installation. $std\n\n" "$script_name"
-        dlt "$script_loc"
+        delfr "$script_loc"
         exit 1
     fi
 }
@@ -1613,21 +1667,21 @@ Menu_Install()
 {
     if [ ! -e "$sng_loc" ]
     then
-        doInstall "$sng"
-    elif force_install "$sng"
+        Do_Install "$sng"
+    elif Force_Install "$sng"
     then
         $S01sng_init stop
-        doInstall "$sng" "FORCE"
+        Do_Install "$sng" "FORCE"
     fi
     echo
     $S01sng_init start
 
     if [ ! -e "$lr_loc" ]
     then
-        doInstall "$lr"
-    elif force_install "$lr"
+        Do_Install "$lr"
+    elif Force_Install "$lr"
     then
-        doInstall "$lr" "FORCE"
+        Do_Install "$lr" "FORCE"
     fi
 
     if _AcquireFLock_ nonblock
@@ -1641,13 +1695,13 @@ Menu_Install()
 
     if ! "$scribeInstalled"
     then
-        setup_Scribe "ALL"
-    elif force_install "$script_name script"
+        Setup_Scribe "ALL"
+    elif Force_Install "$script_name script"
     then
-        setup_Scribe "ALL"
+        Setup_Scribe "ALL"
     fi
 
-    rld_sngconf
+    Reload_sngconf
     printf "\n$white %s setup complete!\n\n" "$script_name"
     PressEnterTo "continue..."
     if ! "$uiScribeInstalled"
@@ -1655,47 +1709,72 @@ Menu_Install()
     fi
 }
 
-menu_restart()
+Menu_Restart()
 {
     if SyslogNg_Running
     then
-        printf "\n$yellow Restarting %s... $std\n" "$sng"
+        printf "\n ${yellow}Restarting %s...${std}\n" "$sng"
         $S01sng_init restart
     else
-        printf "\n$white %s$red NOT$white running! $yellow Starting %s ... $std\n" "$sng"
+        printf "\n ${white}%s ${red}NOT${white} running! ${yellow}Starting...${std}\n" "$sng"
         $S01sng_init start
     fi
-    Hup_uiScribe
+    sleep 1  #Allow time to start up#
+    Restart_uiScribe
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Nov-30] ##
+## Modified by Martinski W. [2026-Jan-11] ##
 ##----------------------------------------##
 StopSyslogNg()
 {
-    printf "$white stopping %s ...\n" "$sng"
+    local lastNLines  logNumLines  logFileSize
+    local messagesLogSAVED="${optmsg}.SAVED.LOG"
+
+    printf "\n ${white}Stopping %s...\n" "$sng"
     $S01sng_init stop
-    # remove any syslog links #
-    clear_loglocs
+    # Remove any syslog links #
+    Clear_Syslog_Links
 
     ## Do NOT move very large files into JFFS/TMPFS ##
+    lastNLines=100
+    logNumLines="$(wc -l < "$optmsg")"
     logFileSize="$(_GetFileSize_ "$optmsg")"
+
     if [ "$(echo "$logFileSize $twoMByte" | awk -F ' ' '{print ($1 < $2)}')" -eq 1 ]
     then
-        mv -f "$optmsg" "$syslog_loc"
+        head -n -$lastNLines "$optmsg" > "${syslog_loc}-1"
     else
-        tail -n 16k "$optmsg" > "$syslog_loc"
+        if [ "$logNumLines" -le "$sysLogLinesMAX" ]
+        then
+            head -n -$lastNLines "$optmsg" > "${syslog_loc}-1"
+        else
+            startNum="$((logNumLines - sysLogLinesMAX))"
+            tail -n +"$startNum" "$optmsg" | head -n -$lastNLines > "${syslog_loc}-1"
+        fi
     fi
-    ln -s "$syslog_loc" "$optmsg"
+    tail -n $lastNLines "$optmsg" > "$syslog_loc"
 
-    printf "$white starting system klogd and syslogd ...\n"
-    start_syslogd
-    if ! $banner
+    if ! "$usbUnmountCaller"
+    then rm -f "$messagesLogSAVED"
+    else mv -f "$optmsg" "$messagesLogSAVED"
+    fi
+    ln -snf "$syslog_loc" "$optmsg"
+
+    if [ "$syslog_loc" = "$jffslog" ]
+    then
+        ln -snf "$syslog_loc" "$tmplog"
+        ln -snf "${syslog_loc}-1" "${tmplog}-1"
+    fi
+
+    printf " ${white}Starting system klogd and syslogd..."
+    Start_SyslogD
+    if ! "$banner"
     then return 0
     fi
-    printf "\n$white %s will be started at next reboot; you\n" "$sng"
-    printf " may type '%s restart' at shell prompt, or\n" "$script_name"
-    printf " select rs from %s menu to restart %s $std\n\n" "$script_name" "$sng"
+    printf "\n ${yellow}%s will be started at the next router reboot.\n" "$sng"
+    printf " You may type ${green}%s restart${yellow} at the shell prompt, or\n" "$script_name"
+    printf " select '${green}rs${yellow}' from %s menu to restart %s.${std}\n\n" "$script_name" "$sng"
 }
 
 StopLogRotate()
@@ -1705,7 +1784,7 @@ StopLogRotate()
     fi
 }
 
-menu_stop()
+Menu_Stop()
 {
     StopSyslogNg
     StopLogRotate
@@ -1717,21 +1796,21 @@ menu_stop()
 doUninstall()
 {
     printf "\n\n"
-    banner=false  # suppress certain messages #
+    banner=false  # Suppress certain messages #
     if [ -e "$sng_loc" ]
     then
         if SyslogNg_Running
         then StopSyslogNg
         fi
-        sed -i "/$script_name stop/d" "$unMount"
+        sed -i "/$script_name stop nologo/d" "$unMount"
         sed -i "/$script_name service_event/d" "$srvcEvent"
-        dlt "$S01sng_init"
-        dlt "$rcfunc_loc"
+        delfr "$S01sng_init"
+        delfr "$rcfunc_loc"
         printf "\n$cyan"
         /opt/bin/opkg remove "$sng"
-        dlt "$sng_conf"
-        dlt "$sngd_d"
-        dlt "$sng_share"
+        delfr "$sng_conf"
+        delfr "$sngd_d"
+        delfr "$sng_share"
 
         if "$skynet_inst" && ! "$reinst"
         then
@@ -1749,18 +1828,18 @@ doUninstall()
         sed -i "/cru a ${LR_CronTagStr}/d" "$postMount"
         printf "\n$cyan"
         /opt/bin/opkg remove "$lr"
-        dlt "$lr_conf"
-        dlt "$lrd_d"
-        dlt "$lr_share"
-        dlt "$lr_daily"
+        delfr "$lr_conf"
+        delfr "$lrd_d"
+        delfr "$lr_share"
+        delfr "$lr_daily"
     else
         not_installed "$lr"
     fi
 
-    dlt "$unzip_dirPath"
-    dlt "$script_zip_file"
-    dlt "/opt/bin/$script_name"
-    dlt "$script_loc"
+    delfr "$unzip_dirPath"
+    delfr "$script_zip_file"
+    delfr "/opt/bin/$script_name"
+    delfr "$script_loc"
     scribeInstalled=false
     if ! "$reinst"
     then
@@ -1801,7 +1880,7 @@ Menu_Uninstall()
     esac
 }
 
-menu_filters()
+Menu_Filters()
 {
     printf "\n$white    Do you want to update$yellow %s$white and$yellow %s$white filter files?\n" "$sng" "$lr"
     printf "$cyan        1) Adds any new files to$yellow %s$cyan directories\n" "$share_ex"
@@ -1860,7 +1939,7 @@ menu_filters()
             done
         done
         printf "\n$white %s and %s example files updated!$std\n" "$sng" "$lr"
-        rld_sngconf
+        Reload_sngconf
     else
         printf "\n$white %s and %s example files$red not$white updated!$std\n" "$sng" "$lr"
     fi
@@ -1869,7 +1948,7 @@ menu_filters()
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Jul-07] ##
 ##----------------------------------------##
-menu_update()
+Menu_Update()
 {
     if [ $# -eq 0 ] || [ -z "$1" ]
     then
@@ -1895,8 +1974,8 @@ menu_update()
     if { [ $# -eq 1 ] && [ "$1" = "force" ] ; } || yes_no
     then
         Get_ZIP_File
-        setup_Scribe "NEWER"
-        copy_rcfunc
+        Setup_Scribe "NEWER"
+        Copy_rcfunc
         printf "\n$white %s updated!$std\n" "$script_name"
         sh "$script_loc" filters gotzip nologo
         sh "$script_loc" status nologo
@@ -1915,7 +1994,7 @@ Update_Version()
    then
        get_vers
        prt_vers
-       menu_update "$@"
+       Menu_Update "$@"
    else
        not_recog=true
    fi
@@ -1954,10 +2033,10 @@ menu_forgrnd()
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Aug-24] ##
 ##----------------------------------------##
-gather_debug()
+Gather_Debug()
 {
     local debugTarball="${script_debug}.tar.gz"
-    dlt "$script_debug" "$debugTarball"
+    delfr "$script_debug" "$debugTarball"
 
     printf "\n$white gathering debugging information...\n"
     get_vers
@@ -2004,8 +2083,8 @@ gather_debug()
         printf "#### %s not running! ####\n%s\n" "$sng" "$debug_sep" >> "$script_debug"
     fi
     printf "\n%s\n### %s on-disk syntax check:\n" "$debug_sep" "$sng" >> "$script_debug"
-    dlt "$sngconf_merged"
-    dlt "$sngconf_error"
+    delfr "$sngconf_merged"
+    delfr "$sngconf_error"
     $sng_loc --preprocess-into="$sngconf_merged" 2> "$sngconf_error"
     cat "$sngconf_merged" >> "$script_debug"
     if [ -s "$sngconf_error" ]
@@ -2088,13 +2167,13 @@ menu_restore()
         case "$rstit" in
             YES)
                 printf "\n$white Restoring %s and %s Configurations ... \n" "$sng" "$lr"
-                dlt "$sngd_d"
-                dlt "$lrd_d"
+                delfr "$sngd_d"
+                delfr "$lrd_d"
                 tar -zxvf "$script_bakname" -C /
                 chmod 600 "$sngd_d"/*
                 chmod 600 "$lrd_d"/*
                 printf "\n$std Backup data has been restored from $cyan%s$std.\n" "$script_bakname"
-                menu_restart
+                Menu_Restart
                 Menu_Status
                 ;;
             *)
@@ -2102,6 +2181,247 @@ menu_restore()
                 ;;
         esac
     fi
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2026-Jan-10] ##
+##-------------------------------------##
+_Create_SysLogNgStartDelay_BGScript_()
+{
+    cat << 'EOFT' > "$bgScript_FPath"
+#!/bin/sh
+# Script to delay starting syslog-ng service (created by Scribe)
+#
+set -u
+
+readonly scriptFName="${0##*/}"
+readonly TEMP_DIR="/tmp/var/tmp"
+readonly logDateTime="%Y-%b-%d %I:%M:%S %p %Z"
+readonly logFilePath="${TEMP_DIR}/${scriptFName%.*}.LOG"
+readonly syslogNg_WaitnSEM_FPath="${TEMP_DIR}/scribe_SysLogNg.WAITN.SEM"
+readonly syslogNg_StartSEM_FPath="${TEMP_DIR}/scribe_SysLogNg.START.SEM"
+
+readonly S01syslogNg_srvc="/opt/etc/init.d/S01syslog-ng"
+readonly logTagStr="${scriptFName}_[$$]"
+
+export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
+
+_LogDebugMsg_()
+{
+   local timeNow="$(date +"$logDateTime")"
+   if [ $# -gt 1 ] && [ "$2" = "_START_" ]
+   then echo "${timeNow}: $1"  > "$logFilePath"
+   else echo "${timeNow}: $1" >> "$logFilePath"
+   fi
+   logger -t "$logTagStr" "$1"
+}
+
+trap '' HUP
+
+_LogDebugMsg_ "Start of Background Script [$scriptFName][$$]" _START_
+
+tempSecs=0
+sleepSecs=5
+checkSecs=30
+cntSleepSecs=0
+sleepSecsMIN=120   #2.0 mins#
+minSleepSecs=150   #2.5 mins#
+sleepSecsMAX=210   #3.5 mins#
+readyToStart=false
+timeCheckStatus=true
+sysLogNg_Param=""
+
+if [ -s "$syslogNg_WaitnSEM_FPath" ]
+then
+    tempSecs="$(head -n1 "$syslogNg_WaitnSEM_FPath")"
+    if echo "$tempSecs" | grep -qE "^[1-3][0-9]{2}$" && \
+       [ "$tempSecs" -ge "$sleepSecsMIN" ] && [ "$tempSecs" -le "$sleepSecsMAX" ]
+    then minSleepSecs="$tempSecs"
+    fi
+fi
+echo "$minSleepSecs" > "$syslogNg_WaitnSEM_FPath"
+
+while true
+do
+    if ! "$readyToStart" && \
+       "$timeCheckStatus" && \
+       [ -x /opt/bin/opkg ] && \
+       [ -x "$S01syslogNg_srvc" ] && \
+       [ "$(nvram get ntp_ready)" = "1" ] && \
+       [ "$(nvram get start_service_ready)" = "1" ] && \
+       [ "$(nvram get success_start_service)" = "1" ]
+    then readyToStart=true
+    fi
+    if "$readyToStart" && [ "$cntSleepSecs" -ge "$minSleepSecs" ]
+    then
+        if [ -z "$(pidof syslog-ng)" ]
+        then sysLogNg_Param=start
+        else sysLogNg_Param=restart
+        fi
+        _LogDebugMsg_ "Calling [$S01syslogNg_srvc $sysLogNg_Param]..."
+
+        rm -f "$syslogNg_WaitnSEM_FPath"
+        echo "$cntSleepSecs" > "$syslogNg_StartSEM_FPath"
+        "$S01syslogNg_srvc" "$sysLogNg_Param"
+
+        _LogDebugMsg_ "Exiting Background Loop [$cntSleepSecs][$$]..."
+        break
+    fi
+    if [ "$cntSleepSecs" -ge "$sleepSecsMAX" ]
+    then
+        rm -f "$syslogNg_WaitnSEM_FPath"
+        _LogDebugMsg_ "Exiting Background Loop [$cntSleepSecs][$$]..."
+        break  #Escape WITHOUT starting service#
+    fi
+    if "$timeCheckStatus"
+    then
+        _LogDebugMsg_ "Sleeping $checkSecs secs [$cntSleepSecs][$$]..."
+    fi
+    sleep "$sleepSecs"
+    cntSleepSecs="$((cntSleepSecs + sleepSecs))"
+    echo "$((minSleepSecs - cntSleepSecs))" > "$syslogNg_WaitnSEM_FPath"
+    if [ "$((cntSleepSecs % checkSecs))" -eq 0 ]
+    then timeCheckStatus=true
+    else timeCheckStatus=false
+    fi
+done
+
+_LogDebugMsg_ "End of Background Script [$scriptFName][$$]"
+rm -f "$0"
+
+#EOF#
+EOFT
+
+   chmod a+x "$bgScript_FPath"
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2026-Jan-10] ##
+##-------------------------------------##
+_Launch_SysLogNgStartDelay_BGScript_()
+{
+    local taskPID  logTag="${script_name}_$$"
+    local bgScript_FName="scribe_SysLogNg_Delay.sh"
+    local bgScript_FPath="${TEMPdir}/$bgScript_FName"
+
+    if [ -s "$bgScript_FPath" ] && \
+       [ -x "$bgScript_FPath" ] && \
+       [ -n "$(pidof "$bgScript_FName")" ]
+    then
+        logger -st "$logTag" -p 4 "INFO: Script [$bgScript_FName] is already running..."
+        return 1
+    fi
+
+    _Create_SysLogNgStartDelay_BGScript_
+
+    if [ ! -s "$bgScript_FPath" ] || [ ! -x "$bgScript_FPath" ]
+    then
+        logger -st "$logTag" -p 3 "**ERROR**: Script [$bgScript_FPath] NOT found."
+        return 1
+    fi
+
+    "$bgScript_FPath" & taskPID=$!
+    logger -st "$logTag" -p 5 "INFO: Background script [$bgScript_FName] started. PID: [$taskPID]"
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2026-Jan-10] ##
+##-------------------------------------##
+_Create_SysLoggerCheck_BGScript_()
+{
+    cat << 'EOFT' > "$bgScript_FPath"
+#!/bin/sh
+# Script to check for system loggers (created by Scribe)
+#
+set -u
+
+readonly scriptFName="${0##*/}"
+readonly TEMP_DIR="/tmp/var/tmp"
+readonly logDateTime="%Y-%b-%d %I:%M:%S %p %Z"
+readonly logFilePath="${TEMP_DIR}/${scriptFName%.*}.LOG"
+
+export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
+
+_LogDebugMsg_()
+{
+   local timeNow="$(date +"$logDateTime")"
+   if [ $# -gt 1 ] && [ "$2" = "_START_" ]
+   then echo "${timeNow}: $1"  > "$logFilePath"
+   else echo "${timeNow}: $1" >> "$logFilePath"
+   fi
+}
+
+trap '' HUP
+
+_LogDebugMsg_ "Start of Background Script [$scriptFName][$$]" _START_
+
+readyOK=false
+klogdEXIT=false
+syslogdEXIT=false
+
+tryCount=0
+maxCount=30
+
+while true
+do
+    usleep 500000  #0.5 sec#
+    [ -z "$(pidof klogd)" ] && klogdEXIT=true
+    [ -z "$(pidof syslogd)" ] && syslogdEXIT=true
+    if "$klogdEXIT" && "$syslogdEXIT"
+    then
+        _LogDebugMsg_ "System loggers [klogd & syslogd] were terminated."
+        _LogDebugMsg_ "Exiting Background Loop [$tryCount][$$]..."
+        break
+    fi
+    if [ "$tryCount" -gt "$maxCount" ]
+    then
+        _LogDebugMsg_ "Exiting Background Loop [$tryCount][$$]..."
+        break  #Something went wrong#
+    fi
+    [ -n "$(pidof klogd)" ] && killall -q klogd
+    [ -n "$(pidof syslogd)" ] && killall -q syslogd
+
+    _LogDebugMsg_ "Sleeping [$tryCount][$$]..."
+    sleep 1
+    tryCount="$((tryCount + 1))"
+done
+
+_LogDebugMsg_ "End of Background Script [$scriptFName][$$]"
+rm -f "$0"
+
+#EOF#
+EOFT
+
+   chmod a+x "$bgScript_FPath"
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2026-Jan-10] ##
+##-------------------------------------##
+_Launch_SysLoggerCheck_BGScript_()
+{
+    local taskPID  logTag="${script_name}_$$"
+    local bgScript_FName="scribe_SysLogger_Check.sh"
+    local bgScript_FPath="${TEMPdir}/$bgScript_FName"
+
+    if [ -s "$bgScript_FPath" ] && \
+       [ -x "$bgScript_FPath" ] && \
+       [ -n "$(pidof "$bgScript_FName")" ]
+    then
+        logger -st "$logTag" -p 4 "INFO: Script [$bgScript_FName] is already running..."
+        return 1
+    fi
+
+    _Create_SysLoggerCheck_BGScript_
+
+    if [ ! -s "$bgScript_FPath" ] || [ ! -x "$bgScript_FPath" ]
+    then
+        logger -st "$logTag" -p 3 "**ERROR**: Script [$bgScript_FPath] NOT found."
+        return 1
+    fi
+
+    "$bgScript_FPath" & taskPID=$!
+    logger -st "$logTag" -p 5 "INFO: Background script [$bgScript_FName] started. PID: [$taskPID]"
 }
 
 ##----------------------------------------##
@@ -2183,46 +2503,57 @@ Utils_Menu()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Jan-04] ##
+## Modified by Martinski W. [2026-Jan-11] ##
 ##----------------------------------------##
 Main_Menu()
 {
-    and_lr=" & $lr cron"
     if SyslogNg_Running
     then
-        res="Res"
-        ins="Rei"
+        resPrefix="Res"
+        insPrefix="Rei"
     else
-        res="S"
-        ins="I"
+        resPrefix="S"
+        if [ ! -f "$syslogNg_WaitnSEM_FPath" ]
+        then insPrefix="I"
+        else insPrefix="Rei"
+        fi
     fi
+    andLRcron="& $lr cron"
+
     if "$scribeInstalled"
     then
+        if ! SyslogNg_Running && [ -f "$syslogNg_WaitnSEM_FPath" ]
+        then
+            _ShowSysLogNg_WaitStart_Msge_
+        fi
         printf "     ${GRNct}s${CLRct}. Show %s status\n" "$script_name"
         if SyslogNg_Running
         then
             printf "    ${GRNct}rl${CLRct}. Reload %s.conf\n" "$sng"
+            printf "    ${GRNct}lr${CLRct}. Run logrotate now\n"
         fi
-        printf "    ${GRNct}lr${CLRct}. Run logrotate now\n"
-        printf "    ${GRNct}rs${CLRct}. %start %s" "$res" "$sng"
-        if ! SyslogNg_Running
+        if SyslogNg_Running || [ ! -f "$syslogNg_WaitnSEM_FPath" ]
         then
-            printf "${and_lr}\n"
-        else
-            printf "\n    ${GRNct}st${CLRct}. Stop %s${and_lr}" "$sng"
-            printf "\n    ${GRNct}ct${CLRct}. Set $lr cron job run frequency\n"
+            printf "    ${GRNct}rs${CLRct}. %s %s " "${resPrefix}tart" "$sng"
+            SyslogNg_Running && echo || printf "${andLRcron}\n"
         fi
         if SyslogNg_Running
         then
-            echo
+            printf "    ${GRNct}st${CLRct}. Stop %s ${andLRcron}\n" "$sng"
+            printf "    ${GRNct}ct${CLRct}. Set $lr cron job run frequency\n\n"
             printf "     ${GRNct}u${CLRct}. Check for script updates\n"
             printf "    ${GRNct}uf${CLRct}. Force update %s with latest version\n" "$script_name"
             printf "    ${GRNct}ft${CLRct}. Update filters\n"
         fi
-        printf "    ${GRNct}su${CLRct}. %s utilities\n" "$script_name"
+        if [ -f "$syslogNg_WaitnSEM_FPath" ]
+        then
+            echo
+        else
+            printf "    ${GRNct}su${CLRct}. %s utilities\n\n" "$script_name"
+        fi
     fi
-    printf "     ${GRNct}e${CLRct}. Exit %s\n\n" "$script_name"
-    printf "    ${GRNct}is${CLRct}. %snstall %s\n" "$ins" "$script_name" 
+    printf "     ${GRNct}e${CLRct}. Exit %s\n" "$script_name"
+    printf "    ${GRNct}is${CLRct}. %s %s\n" "${insPrefix}nstall" "$script_name" 
     printf "    ${GRNct}zs${CLRct}. Remove %s\n" "$script_name"
 }
 
@@ -2262,7 +2593,7 @@ Scribe_Menu()
                 rl)
                     if SyslogNg_Running
                     then
-                        rld_sngconf
+                        Reload_sngconf
                     else
                         not_recog=true
                     fi
@@ -2278,13 +2609,13 @@ Scribe_Menu()
                     fi
                     ;;
                 rs)
-                    menu_restart
+                    Menu_Restart
                     Menu_Status
                     ;;
                 st)
                     if SyslogNg_Running
                     then
-                        menu_stop
+                        Menu_Stop
                     else
                         not_recog=true
                     fi
@@ -2307,7 +2638,7 @@ Scribe_Menu()
                 ft)
                     if SyslogNg_Running
                     then
-                        menu_filters
+                        Menu_Filters
                     else
                         not_recog=true
                     fi
@@ -2323,16 +2654,16 @@ Scribe_Menu()
                     menu_restore
                     ;;
                 d)
-                    gather_debug
+                    Gather_Debug
                     printf "\n$white Would you like to review the debug data (opens in less)? [y|n] $std"
                     if yes_no; then pause=false; less "$script_debug"; fi
                     ;;
                 c)
-                    show_config
+                    SysLogNg_ShowConfig
                     pause=false
                     ;;
                 rd)
-                    create_conf
+                    Create_Config
                     ;;
                 lc)
                     if SyslogNg_Running
@@ -2347,7 +2678,7 @@ Scribe_Menu()
                     menu_forgrnd
                     ;;
                 ld)
-                    dlt "$lr_temp"
+                    delfr "$lr_temp"
                     if _AcquireFLock_
                     then
                         _DoRotateLogFiles_ DEBUG TEMP
@@ -2389,7 +2720,7 @@ Scribe_Menu()
                     fi
                     if "$do_inst"
                     then
-                        pre_install
+                        PreInstall_Check
                         Get_ZIP_File
                         Menu_Install
                         sh "$script_loc" status nologo
@@ -2434,25 +2765,26 @@ then sysLogFiFoSizeMIN=2048
 else sysLogFiFoSizeMIN=1024
 fi
 
-if ! SyslogDm_Running && ! SyslogNg_Running
+if ! SyslogD_Running && ! SyslogNg_Running && \
+   ! "$usbUnmountCaller" && [ "$action" != "SysLoggerCheck" ]
 then
-    printf "\n\n${red} *WARNING*: $white No system logger was running!!\n"
-    printf "Starting system loggers ..."
-    start_syslogd
+    printf "\n\n ${red}*WARNING*${white}: No system logger was running!!${std}\n"
+    printf "Starting system loggers (klogd and syslogd)..."
+    Start_SyslogD
 fi
 
 if [ "$action" != "help" ] && \
    [ "$action" != "about" ]
 then
-    # read or create config file #
-    read_conf
+    # Read or create config file #
+    Read_Config
 fi
 
 if [ "$action" = "menu" ]
 then
     menu_type="main"
     Scribe_Menu
-elif ! echo "$action" | grep -q '^LogRotate'
+elif ! echo "$action" | grep -qE '^(LogRotate|SysLog)'
 then
     ScriptLogo
 fi
@@ -2477,7 +2809,7 @@ case "$action" in
             printf " Please use menu command 'is' to reinstall. ${std}\n\n"
             exit 1
         fi
-        pre_install
+        PreInstall_Check
         Get_ZIP_File
         Menu_Install
         sh "$script_loc" status nologo
@@ -2508,7 +2840,9 @@ case "$action" in
     show-config | config)
         if "$scribeInstalled"
         then
-            if show_config; then sng_syntax; fi
+            if SysLogNg_ShowConfig
+            then SysLogNg_Config_SyntaxCheck
+            fi
         fi
         ;;
 
@@ -2522,7 +2856,7 @@ case "$action" in
     #reload syslog-ng configuration#
     reload)
         if SyslogNg_Running
-        then rld_sngconf
+        then Reload_sngconf
         fi
         ;;
 
@@ -2530,15 +2864,15 @@ case "$action" in
     restart | start)
         if "$scribeInstalled"
         then
-            menu_restart
+            Menu_Restart
             Menu_Status
         fi
         ;;
 
     #stop syslog-ng & logrotate cron job#
     stop)
-        if SyslogNg_Running
-        then menu_stop
+        if SyslogNg_Running || "$usbUnmountCaller"
+        then Menu_Stop
         fi
         ;;
 
@@ -2555,7 +2889,7 @@ case "$action" in
     LogRotateDebug)
         if _AcquireFLock_
         then
-            dlt "$lr_temp"
+            delfr "$lr_temp"
             _DoRotateLogFiles_ DEBUG TEMP
             _ReleaseFLock_
             more "$lr_temp"
@@ -2569,20 +2903,31 @@ case "$action" in
     #generate debug tarball#
     debug)
         if "$scribeInstalled"
-        then gather_debug
+        then Gather_Debug
         fi
         ;;
 
     #update syslog-ng and logrotate filters - only used in update process#
     filters)
         if SyslogNg_Running
-        then menu_filters
+        then Menu_Filters
         fi
         ;;
 
-    #kill syslogd & klogd - only available via CLI#
+    SysLoggerCheck)
+        _Launch_SysLoggerCheck_BGScript_
+        exit 0
+        ;;
+
+    SysLogNgStartDelay)
+        _Launch_SysLogNgStartDelay_BGScript_
+        exit 0
+        ;;
+
+    #Kill syslogd & klogd - only available via CLI#
     service_event)
         if ! SyslogNg_Running || [ "$2" = "stop" ] || \
+           [ "$2" = "reboot" ] || [ "$3" = "ntpd" ] || \
            echo "$3" | grep -qE "^$uiscribeName"
         then exit 0
         fi
@@ -2596,13 +2941,13 @@ case "$action" in
         lastTimeSecs="$(_ServiceEventTime_ check)"
         thisTimeDiff="$(echo "$currTimeSecs $lastTimeSecs" | awk -F ' ' '{printf("%s", $1 - $2);}')"
         
-        #Only once every 15 minutes at most#
-        if [ "$thisTimeDiff" -ge 900 ]
+        #Only once every 20 minutes at most#
+        if [ "$thisTimeDiff" -ge 1200 ]
         then
             _ServiceEventTime_ update "$currTimeSecs"
             . "$rcfunc_loc"
             kill_logger false
-            sync_conf
+            SysLogNg_Config_Sync
             _ServiceEventTime_ update "$(date +'%s')"
         else
             exit 1

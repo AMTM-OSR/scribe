@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Jan-11
+# Last Modified: 2026-Jan-12
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -35,7 +35,7 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.7"
-readonly scriptVer_TAG="26011122"
+readonly scriptVer_TAG="26011223"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -644,9 +644,33 @@ Reload_sngconf()
 Copy_rcfunc()
 {
     printf "$white copying %s to %s ...$std" "$rcfunc_sng" "$init_d"
-    cp -pf "$unzip_dirPath/init.d/$rcfunc_sng" "$init_d/"
+    cp -fp "${unzip_dirPath}/init.d/$rcfunc_sng" "$init_d/"
     chmod 644 "$rcfunc_loc"
     finished
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2026-Jan-12] ##
+##-------------------------------------##
+Copy_LogRotate_Global_Config()
+{
+    local forceUpdate=false
+    local srceFile="${unzip_dirPath}/${logRotateStr}.d/$logRotateGlobalName"
+
+    [ ! -s "$srceFile" ] && return 1
+    [ ! -d "$logRotateExamplesDir" ] && mkdir "$logRotateExamplesDir"
+    if [ $# -gt 0 ] && [ "$1" = "force" ]
+    then forceUpdate=true
+    fi
+
+    for destFile in "$logRotateGlobalConf" "${logRotateExamplesDir}/$logRotateGlobalName"
+    do
+        if [ ! -s "$destFile" ] || "$forceUpdate"
+        then
+            cp -fp "$srceFile" "$destFile" 2>/dev/null
+            chmod 600 "$destFile"
+        fi
+    done
 }
 
 ##-------------------------------------##
@@ -1146,22 +1170,23 @@ prt_vers()
     printf "$std\n\n"
 }
 
-# Install default file in /usr/etc/$1.d #
+# Install default file in /opt/etc/$1.d #
 setup_ddir()
 {
     [ "$1" = "$sng" ] && d_dir="$sngd_d"
     [ "$1" = "$lr"  ] && d_dir="$lrd_d"
     
-    for dfile in "$unzip_dirPath/${1}.d"/*
+    for dfile in "${unzip_dirPath}/${1}.d"/*
     do
         dfbase="$( strip_path "$dfile" )"
         ddfile="$d_dir/$dfbase"
-        { [ ! -e "$ddfile" ] || [ "$2" = "ALL" ]; } && cp -p "$dfile" "$ddfile"
+        { [ ! -e "$ddfile" ] || [ "$2" = "ALL" ]; } && \
+        cp -p "$dfile" "$ddfile"
     done
     chmod 600 "$d_dir"/*
 }
 
-# Install example files in /usr/share/$1/examples #
+# Install example files in /opt/share/$1/examples #
 setup_exmpls()
 {
     [ "$1" = "$sng" ] && share="$sng_share" && conf="$sng_conf"
@@ -1173,7 +1198,7 @@ setup_exmpls()
     [ ! -d "$share" ] && mkdir "$share"
     [ ! -d "$share/examples" ] && mkdir "$share/examples"
 
-    for exmpl in "$unzip_dirPath/${1}.share"/*
+    for exmpl in "${unzip_dirPath}/${1}.share"/*
     do
         shrfile="$share/examples/$( strip_path "$exmpl" )"
         if [ ! -e "$shrfile" ] || [ "$2" = "ALL" ]
@@ -1938,10 +1963,10 @@ Menu_Filters()
                 fi
             done
         done
-        printf "\n$white %s and %s example files updated!$std\n" "$sng" "$lr"
+        printf "\n ${white}%s and %s example files updated!${std}\n" "$sng" "$lr"
         Reload_sngconf
     else
-        printf "\n$white %s and %s example files$red not$white updated!$std\n" "$sng" "$lr"
+        printf "\n ${white}%s and %s example files ${red}not${white} updated!${std}\n" "$sng" "$lr"
     fi
 }
 
@@ -1971,11 +1996,12 @@ Menu_Update()
         fi
     fi
 
-    if { [ $# -eq 1 ] && [ "$1" = "force" ] ; } || yes_no
+    if { [ $# -gt 0 ] && [ "$1" = "force" ] ; } || yes_no
     then
         Get_ZIP_File
         Setup_Scribe "NEWER"
         Copy_rcfunc
+        Copy_LogRotate_Global_Config "$@"
         printf "\n$white %s updated!$std\n" "$script_name"
         sh "$script_loc" filters gotzip nologo
         sh "$script_loc" status nologo
@@ -2924,10 +2950,10 @@ case "$action" in
         exit 0
         ;;
 
-    #Kill syslogd & klogd - only available via CLI#
+    #Kill syslogd & klogd#
     service_event)
-        if ! SyslogNg_Running || [ "$2" = "stop" ] || \
-           [ "$2" = "reboot" ] || [ "$3" = "ntpd" ] || \
+        if ! SyslogNg_Running || [ -z "$2" ] || \
+           [ "$2" = "stop" ] || [ "$3" = "ntpd" ] || \
            echo "$3" | grep -qE "^$uiscribeName"
         then exit 0
         fi

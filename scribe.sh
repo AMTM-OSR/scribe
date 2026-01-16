@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Jan-12
+# Last Modified: 2026-Jan-15
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -35,7 +35,7 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.7"
-readonly scriptVer_TAG="26011223"
+readonly scriptVer_TAG="26011523"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -182,7 +182,7 @@ readonly logRotateCmd="/opt/sbin/$logRotateStr"
 readonly logRotateDir="/opt/etc/${logRotateStr}.d"
 readonly logRotateShareDir="/opt/share/$logRotateStr"
 readonly logRotateExamplesDir="${logRotateShareDir}/examples"
-readonly logRotateTopConf="/opt/etc/${logRotateStr}.conf"
+readonly logRotateTopConfig="/opt/etc/${logRotateStr}.conf"
 readonly logRotateGlobalName="A01global"
 readonly logRotateGlobalConf="${logRotateDir}/$logRotateGlobalName"
 readonly LR_FLock_FD=513
@@ -190,6 +190,10 @@ readonly LR_FLock_FName="/tmp/scribeLogRotate.flock"
 readonly logFilesRegExp="${optVarLogDir}/.*([.]log)?"
 readonly filteredLogList="${config_d}/.filteredlogs"
 readonly noConfigLogList="${config_d}/.noconfiglogs"
+readonly syslogNg_ShareDir="/opt/share/$syslogNgStr"
+readonly syslogNg_ExamplesDir="${syslogNg_ShareDir}/examples"
+readonly syslogNg_ConfName=${syslogNgStr}.conf
+readonly syslogNg_TopConfig="/opt/etc/$syslogNg_ConfName"
 readonly syslogNg_WaitnSEM_FPath="${TEMPdir}/scribe_SysLogNg.WAITN.SEM"
 readonly syslogNg_StartSEM_FPath="${TEMPdir}/scribe_SysLogNg.START.SEM"
 readonly sysLogLinesMAX=20480
@@ -264,7 +268,7 @@ updated(){ printf "$yellow updated. $std\n"; }
 
 finished(){ printf "$green done. $std\n"; }
 
-not_installed(){ printf "\n$blue %s$red NOT$white installed! $std\n" "$1"; }
+not_installed(){ printf "\n ${blue}%s ${red}NOT${white} installed!${std}\n" "$1"; }
 
 PressEnterTo()
 { printf "$white Press <Enter> key to %s $std" "$1"; read -rs inputKey; echo; }
@@ -523,7 +527,7 @@ Read_Config()
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Aug-23] ##
 ##----------------------------------------##
-update_file()
+Update_File()
 {
     if [ $# -gt 2 ] && [ "$3" = "backup" ]
     then date_stamp "$2"
@@ -531,8 +535,7 @@ update_file()
     cp -fp "$1" "$2"
 }
 
-# Check Yes or No #
-yes_no()
+Yes_Or_No()
 {
     read -r resp
     case "$resp" in
@@ -633,7 +636,7 @@ Restart_uiScribe()
     fi
 }
 
-Reload_sngconf()
+Reload_SysLogNg_Config()
 {
     printf "$white reloading %s ... $cyan" "$( strip_path $sng_conf )"
     $sngctl_loc reload
@@ -641,7 +644,7 @@ Reload_sngconf()
     Restart_uiScribe
 }
 
-Copy_rcfunc()
+Copy_SysLogNg_RcFunc()
 {
     printf "$white copying %s to %s ...$std" "$rcfunc_sng" "$init_d"
     cp -fp "${unzip_dirPath}/init.d/$rcfunc_sng" "$init_d/"
@@ -650,15 +653,39 @@ Copy_rcfunc()
 }
 
 ##-------------------------------------##
+## Added by Martinski W. [2026-Jan-15] ##
+##-------------------------------------##
+Copy_SysLogNg_Top_Config()
+{
+    local forceUpdate=false
+    local srceFile="${unzip_dirPath}/${syslogNgStr}.share/${syslogNg_ConfName}-scribe"
+
+    [ ! -s "$srceFile" ] && return 1
+    [ ! -d "$syslogNg_ExamplesDir" ] && mkdir -p "$syslogNg_ExamplesDir"
+    if [ $# -gt 0 ] && [ "$1" = "force" ]
+    then forceUpdate=true
+    fi
+
+    for destFile in "$syslogNg_TopConfig" "${syslogNg_ExamplesDir}/${syslogNg_ConfName}-scribe"
+    do
+        if [ ! -s "$destFile" ] || "$forceUpdate"
+        then
+            cp -fp "$srceFile" "$destFile"
+            chmod 644 "$destFile"
+        fi
+    done
+}
+
+##-------------------------------------##
 ## Added by Martinski W. [2026-Jan-12] ##
 ##-------------------------------------##
-Copy_LogRotate_Global_Config()
+Copy_LogRotate_Global_Options()
 {
     local forceUpdate=false
     local srceFile="${unzip_dirPath}/${logRotateStr}.d/$logRotateGlobalName"
 
     [ ! -s "$srceFile" ] && return 1
-    [ ! -d "$logRotateExamplesDir" ] && mkdir "$logRotateExamplesDir"
+    [ ! -d "$logRotateExamplesDir" ] && mkdir -p "$logRotateExamplesDir"
     if [ $# -gt 0 ] && [ "$1" = "force" ]
     then forceUpdate=true
     fi
@@ -667,7 +694,7 @@ Copy_LogRotate_Global_Config()
     do
         if [ ! -s "$destFile" ] || "$forceUpdate"
         then
-            cp -fp "$srceFile" "$destFile" 2>/dev/null
+            cp -fp "$srceFile" "$destFile"
             chmod 600 "$destFile"
         fi
     done
@@ -1203,17 +1230,17 @@ setup_exmpls()
         shrfile="$share/examples/$( strip_path "$exmpl" )"
         if [ ! -e "$shrfile" ] || [ "$2" = "ALL" ]
         then
-            update_file "$exmpl" "$shrfile"
+            Update_File "$exmpl" "$shrfile"
         elif ! same_same "$exmpl" "$shrfile"
         then
             printf " updating %s\n" "$shrfile"
-            update_file "$exmpl" "$shrfile"
+            Update_File "$exmpl" "$shrfile"
         fi
     done
 
     if [ -e "$conf_opkg" ]
     then
-        update_file "$conf_opkg" "$share/examples/$opkg" "backup"
+        Update_File "$conf_opkg" "$share/examples/$opkg" "backup"
         delfr "$conf_opkg"
     elif [ ! -e "$share/examples/$opkg" ]
     then
@@ -1235,10 +1262,13 @@ Force_Install()
     printf "\n$blue %s$white already installed!\n" "$1"
     [ "$1" != "$script_name" ] && printf "$yellow Forcing installation$red WILL OVERWRITE$yellow any modified configuration files!\n"
     printf "$white Do you want to force re-installation of %s [y|n]? $std" "$1"
-    yes_no
+    Yes_Or_No
     return $?
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2026-Jan-15] ##
+##----------------------------------------##
 SysLogNg_ShowConfig()
 {
     if [ -e "$sng_loc" ]
@@ -1247,22 +1277,28 @@ SysLogNg_ShowConfig()
         delfr "$sngconf_error"
         if $sng_loc --preprocess-into="$sngconf_merged" 2> "$sngconf_error"
         then
-            less "$sngconf_merged"
+            printf "\n\n" ; more "$sngconf_merged"
         else 
-            less "$sngconf_error"
+            printf "\n\n" ; more "$sngconf_error"
         fi
-        true
+        echo ; PressEnterTo "continue..."
+        return 0
     else
         not_installed "$sng"
-        false
+        echo ; PressEnterTo "continue..."
+        return 1
     fi
 }
 
-show_loaded()
+##----------------------------------------##
+## Modified by Martinski W. [2026-Jan-15] ##
+##----------------------------------------##
+Show_SysLogNg_LoadedConfig()
 {
     delfr "$sngconf_merged"
     $sngctl_loc config --preprocessed > "$sngconf_merged"
-    less "$sngconf_merged"
+    printf "\n\n" ; more "$sngconf_merged"
+    echo ; PressEnterTo "continue..."
 }
 
 ##-------------------------------------##
@@ -1380,6 +1416,7 @@ _DoPostRotateCleanup_()
     else
         cp -fp "${logRotateExamplesDir}/$logRotateGlobalName" "$logRotateGlobalConf"
     fi
+    chmod 600 "$logRotateGlobalConf"
 }
 
 ##-------------------------------------##
@@ -1407,7 +1444,7 @@ _RotateAllLogFiles_Preamble_()
         then return 1
         fi
         cp -fp "${logRotateExamplesDir}/$logRotateGlobalName" "$logRotateGlobalConf"
-        chmod 644 "$logRotateGlobalConf"
+        chmod 600 "$logRotateGlobalConf"
     fi
     cp -fp "$logRotateGlobalConf" "${config_d}/${logRotateGlobalName}.SAVED"
 
@@ -1450,13 +1487,13 @@ _DoRotateLogFiles_()
     if [ "$callType" != "DEBUG" ]
     then
         rm -f "$lr_daily"
-        $logRotateCmd "$logRotateTopConf" >> "$lr_daily" 2>&1
+        $logRotateCmd "$logRotateTopConfig" >> "$lr_daily" 2>&1
     else
         if [ $# -gt 1 ] && [ "$2" = "TEMP" ]
         then debugLog="$lr_temp"
         else debugLog="$script_debug"
         fi
-        $logRotateCmd -d "$logRotateTopConf" >> "$debugLog" 2>&1
+        $logRotateCmd -d "$logRotateTopConfig" >> "$debugLog" 2>&1
     fi
 
     if [ "$callType" = "DORUN" ]
@@ -1508,14 +1545,14 @@ sng_ver_chk()
 Setup_SysLogNG()
 {
     printf "\n$magenta setting up %s ...\n$std" "$sng"
-    Copy_rcfunc
+    Copy_SysLogNg_RcFunc
     sed_SysLogNg_Init
     sed_srvcEvent
     sed_unMount
     if [ "$( md5_file "$sng_share/examples/${sng}.conf-scribe" )" != "$( md5_file "$sng_conf" )" ]
     then
         printf "$white %34s" "updating $( strip_path "$sng_conf" ) ..."
-        update_file "$sng_share/examples/${sng}.conf-scribe" "$sng_conf" "backup"
+        Update_File "$sng_share/examples/${sng}.conf-scribe" "$sng_conf" "backup"
         finished
     fi
     SysLogNg_Config_Sync
@@ -1593,7 +1630,7 @@ Install_uiScribe()
     printf "\n$white Would you like to install$cyan %s %s$white, a script by Jack Yaz\n" "$uiscribeName" "$uiscribeVer"
     printf " that modifies the webui$yellow System Log$white page to show the various logs\n"
     printf " generated by %s in individual drop-down windows [y|n]? " "$sng"
-    if yes_no
+    if Yes_Or_No
     then
         printf "\n"
         curl -LSs --retry 4 --retry-delay 5 --retry-connrefused "$uiscribeRepo" -o "$uiscribePath" && \
@@ -1669,7 +1706,7 @@ PreInstall_Check()
         if "$reqsOK"
         then
             printf " Do you want to continue installation of %s [y|n]? $std" "$script_name"
-            if ! yes_no
+            if ! Yes_Or_No
             then
                 reqsOK=false
             fi
@@ -1726,7 +1763,7 @@ Menu_Install()
         Setup_Scribe "ALL"
     fi
 
-    Reload_sngconf
+    Reload_SysLogNg_Config
     printf "\n$white %s setup complete!\n\n" "$script_name"
     PressEnterTo "continue..."
     if ! "$uiScribeInstalled"
@@ -1920,7 +1957,7 @@ Menu_Filters()
     printf "$yellow    If you are unsure, you should answer 'y' here; any changes to\n"
     printf "    the running configuration will require confirmation.\n\n"
     printf "$white        Update filter files? [y|n] $std"
-    if yes_no
+    if Yes_Or_No
     then
         Get_ZIP_File
         for pckg in $sng $lr
@@ -1942,7 +1979,7 @@ Menu_Filters()
                         read -r dispo
                         case "$dispo" in
                             a)
-                                update_file "$comp_file" "$upd_file"
+                                Update_File "$comp_file" "$upd_file"
                                 printf "\n$green %s updated!$std\n" "$upd_file"
                                 processed=true
                                 ;;
@@ -1964,7 +2001,7 @@ Menu_Filters()
             done
         done
         printf "\n ${white}%s and %s example files updated!${std}\n" "$sng" "$lr"
-        Reload_sngconf
+        Reload_SysLogNg_Config
     else
         printf "\n ${white}%s and %s example files ${red}not${white} updated!${std}\n" "$sng" "$lr"
     fi
@@ -1996,12 +2033,13 @@ Menu_Update()
         fi
     fi
 
-    if { [ $# -gt 0 ] && [ "$1" = "force" ] ; } || yes_no
+    if { [ $# -gt 0 ] && [ "$1" = "force" ] ; } || Yes_Or_No
     then
         Get_ZIP_File
         Setup_Scribe "NEWER"
-        Copy_rcfunc
-        Copy_LogRotate_Global_Config "$@"
+        Copy_SysLogNg_RcFunc
+        Copy_SysLogNg_Top_Config "$@"
+        Copy_LogRotate_Global_Options "$@"
         printf "\n$white %s updated!$std\n" "$script_name"
         sh "$script_loc" filters gotzip nologo
         sh "$script_loc" status nologo
@@ -2037,7 +2075,7 @@ menu_forgrnd()
         printf " Debugging mode is intended for troubleshooting when\n"
         printf " %s will not start.\n\n" "$sng"
         printf " Are you certain you wish to start debugging mode [y|n]? $std"
-        if ! yes_no; then return; fi
+        if ! Yes_Or_No; then return; fi
         restrt=true
     fi
     printf "\n$yellow NOTE: If there are no errors, debugging mode will\n"
@@ -2512,7 +2550,7 @@ Utils_Menu()
     printf "    ${GRNct}rt${CLRct}. Restore configuration files\n\n"
     printf "     ${GRNct}d${CLRct}. Generate debug file\n"
     printf "    ${GRNct}rd${CLRct}. Re-detect syslog.log location\n"
-    printf "     ${GRNct}c${CLRct}. Check on-disk %s config\n" "$sng"
+    printf "    ${GRNct}ck${CLRct}. Check on-disk %s config\n" "$sng"
     if SyslogNg_Running
     then
         printf "    ${GRNct}lc${CLRct}. Show loaded %s config\n" "$sng"
@@ -2619,7 +2657,7 @@ Scribe_Menu()
                 rl)
                     if SyslogNg_Running
                     then
-                        Reload_sngconf
+                        Reload_SysLogNg_Config
                     else
                         not_recog=true
                     fi
@@ -2682,9 +2720,9 @@ Scribe_Menu()
                 d)
                     Gather_Debug
                     printf "\n$white Would you like to review the debug data (opens in less)? [y|n] $std"
-                    if yes_no; then pause=false; less "$script_debug"; fi
+                    if Yes_Or_No; then pause=false; less "$script_debug"; fi
                     ;;
-                c)
+                ck)
                     SysLogNg_ShowConfig
                     pause=false
                     ;;
@@ -2694,7 +2732,7 @@ Scribe_Menu()
                 lc)
                     if SyslogNg_Running
                     then
-                        show_loaded
+                        Show_SysLogNg_LoadedConfig
                         pause=false
                     else
                         not_recog=true
@@ -2709,9 +2747,9 @@ Scribe_Menu()
                     then
                         _DoRotateLogFiles_ DEBUG TEMP
                         _ReleaseFLock_
-                        more "$lr_temp" ; echo
+                        printf "\n\n" ; more "$lr_temp"
+                        echo ; PressEnterTo "continue..."
                         pause=false
-                        PressEnterTo "continue..."
                     else
                         printf "\n${red} Unable to acquire lock to run logrotate.${std}\n"
                         printf "\n${red} The program may be currently running.${std}\n\n"
@@ -2862,7 +2900,7 @@ case "$action" in
         Update_Version force
         ;;
 
-    #show total combined config#
+    #Show total combined config#
     show-config | config)
         if "$scribeInstalled"
         then
@@ -2872,21 +2910,20 @@ case "$action" in
         fi
         ;;
 
-    #verify syslog-ng is running and logrotate is listed in 'cru l'#
+    #Verify syslog-ng is running and logrotate Cron Job exists#
     status)
         if "$scribeInstalled"
         then Menu_Status
         fi
         ;;
 
-    #reload syslog-ng configuration#
     reload)
         if SyslogNg_Running
-        then Reload_sngconf
+        then Reload_SysLogNg_Config
         fi
         ;;
 
-    #restart (or start if not running) syslog-ng#
+    #Restart (or start if not running) syslog-ng#
     restart | start)
         if "$scribeInstalled"
         then
@@ -2895,14 +2932,14 @@ case "$action" in
         fi
         ;;
 
-    #stop syslog-ng & logrotate cron job#
+    #Stop syslog-ng & logrotate Cron Job#
     stop)
         if SyslogNg_Running || "$usbUnmountCaller"
         then Menu_Stop
         fi
         ;;
 
-    # Calling logrotate via a cron Job ##
+    # Calling logrotate via a Cron Job ##
     LogRotate)
         if _AcquireFLock_ nonblock
         then
@@ -2918,7 +2955,7 @@ case "$action" in
             delfr "$lr_temp"
             _DoRotateLogFiles_ DEBUG TEMP
             _ReleaseFLock_
-            more "$lr_temp"
+            echo ; more "$lr_temp" ; echo
         else
             printf "\n${red} Unable to acquire lock to run logrotate.${std}\n"
             printf "\n${red} The program may be currently running.${std}\n\n"
@@ -2926,14 +2963,14 @@ case "$action" in
         exit 0
         ;;
 
-    #generate debug tarball#
+    #Generate Debug tarball#
     debug)
         if "$scribeInstalled"
         then Gather_Debug
         fi
         ;;
 
-    #update syslog-ng and logrotate filters - only used in update process#
+    #Update syslog-ng and logrotate filters - only used in update process#
     filters)
         if SyslogNg_Running
         then Menu_Filters

@@ -1,7 +1,7 @@
 #!/bin/sh -
 #
 # NB: rc.func only runs PRECMD on "start"
-# Last Modified: 2026-Jan-11
+# Last Modified: 2026-Jan-15
 # VERSION="3.1.3"
 #-------------------------------------------
 
@@ -16,7 +16,7 @@ catCmd="$(which -a cat | $grepCmd -v '^/opt/')"
 cutCmd="$(which -a cut | $grepCmd -v '^/opt/')"
 pidofCmd="$(which -a pidof | $grepCmd -v '^/opt/')"
 loggerCmd="$(which -a logger | $grepCmd -v '^/opt/')"
-logTagStr="Scribe:kill_logger[$$]"
+logTagStr="scribe:kill_logger[$$]"
 logPrioNum="-p 4"
 
 ##----------------------------------------##

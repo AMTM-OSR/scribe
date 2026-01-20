@@ -2,7 +2,4 @@
     minsize 1024k
     daily
     rotate 1
-    postrotate
-        /usr/bin/killall -HUP syslog-ng
-    endscript
 }

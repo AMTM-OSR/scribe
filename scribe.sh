@@ -36,7 +36,7 @@
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.7"
 readonly scriptVer_TAG="26011523"
-scribe_branch="develop"
+scribe_branch="master"
 script_branch="$scribe_branch"
 
 # Ensure firmware binaries are used, not Entware #

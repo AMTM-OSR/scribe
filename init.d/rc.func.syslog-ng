@@ -1,51 +1,52 @@
 #!/bin/sh -
 #
 # NB: rc.func only runs PRECMD on "start"
-# Last Modified: 2026-Jan-15
-# VERSION="3.1.3"
+# Last Modified: 2026-Jan-25
+# VERSION="3.1.4"
 #-------------------------------------------
 
 ## Run the F/W built-in native commands ##
-grepCmd="$(which -a grep | grep -v '^/opt/')"
-psCmd="$(which -a ps | $grepCmd -v '^/opt/')"
-rmCmd="$(which -a rm | $grepCmd -v '^/opt/')"
-lnCmd="$(which -a ln | $grepCmd -v '^/opt/')"
-lsCmd="$(which -a ls | $grepCmd -v '^/opt/')"
-awkCmd="$(which -a awk | $grepCmd -v '^/opt/')"
-catCmd="$(which -a cat | $grepCmd -v '^/opt/')"
-cutCmd="$(which -a cut | $grepCmd -v '^/opt/')"
-pidofCmd="$(which -a pidof | $grepCmd -v '^/opt/')"
-loggerCmd="$(which -a logger | $grepCmd -v '^/opt/')"
+grepCmd="/bin/grep"
+headCmd="/usr/bin/head"
+psCmd="$(which -a ps | $grepCmd -v '^/opt/' | $headCmd -n1)"
+rmCmd="$(which -a rm | $grepCmd -v '^/opt/' | $headCmd -n1)"
+lnCmd="$(which -a ln | $grepCmd -v '^/opt/' | $headCmd -n1)"
+lsCmd="$(which -a ls | $grepCmd -v '^/opt/' | $headCmd -n1)"
+awkCmd="$(which -a awk | $grepCmd -v '^/opt/' | $headCmd -n1)"
+catCmd="$(which -a cat | $grepCmd -v '^/opt/' | $headCmd -n1)"
+cutCmd="$(which -a cut | $grepCmd -v '^/opt/' | $headCmd -n1)"
+pidofCmd="$(which -a pidof | $grepCmd -v '^/opt/' | $headCmd -n1)"
+loggerCmd="$(which -a logger | $grepCmd -v '^/opt/' | $headCmd -n1)"
 logTagStr="scribe:kill_logger[$$]"
 logPrioNum="-p 4"
 
 ##----------------------------------------##
-## Modified by Martinski W. [2026-Jan-11] ##
+## Modified by Martinski W. [2026-Jan-25] ##
 ##----------------------------------------##
 kill_logger()
 {
     local serviceCallOK  prevSysLog_Loc  messagesLogSAVED
     local scribeScriptFPath="/jffs/scripts/scribe"
-    local syslogNg_WaitnSEM_FPath="/tmp/var/tmp/scribe_SysLogNg.WAITN.SEM"
-    local syslogNg_StartSEM_FPath="/tmp/var/tmp/scribe_SysLogNg.START.SEM"
+    local syslogNG_WaitnSEM_FPath="/tmp/var/tmp/scribe_SysLogNg.WAITN.SEM"
+    local syslogNG_StartSEM_FPath="/tmp/var/tmp/scribe_SysLogNg.START.SEM"
 
     if [ $# -eq 0 ] || [ -z "$1" ] || [ "$1" = "true" ]
     then
         serviceCallOK=true
     else
         serviceCallOK=false
-        [ ! -f "$syslogNg_StartSEM_FPath" ] && exit 1
+        [ ! -f "$syslogNG_StartSEM_FPath" ] && exit 1
     fi
 
     # If START Semaphore NOT found, call Scribe to set it up after a specified delay #
-    if [ ! -f "$syslogNg_StartSEM_FPath" ]
+    if [ ! -f "$syslogNG_StartSEM_FPath" ]
     then
         $loggerCmd -t "$logTagStr" $logPrioNum "Calling Scribe SysLogNgStartDelay..."
-        echo "150" > "$syslogNg_WaitnSEM_FPath"
+        echo "150" > "$syslogNG_WaitnSEM_FPath"
         nohup "$scribeScriptFPath" SysLogNgStartDelay >/dev/null 2>&1 &
         exit 1
     fi
-    $rmCmd -f "$syslogNg_WaitnSEM_FPath"  #Done waiting. We can start now#
+    $rmCmd -f "$syslogNG_WaitnSEM_FPath"  #Done waiting. We can start now#
 
     # These will be set if coming from Scribe; on bootup, these will NOT be set #
     [ -z "$tmplog" ] && tmplog="/tmp/syslog.log"
@@ -138,9 +139,9 @@ kill_logger()
         then  ## Transfer 1st part of the system log ##
             $catCmd "${syslog_loc}-1" >> "$optmsg"
         fi
-        $catCmd "$syslog_loc" >> "$optmsg"
+        [ -s "$syslog_loc" ] && $catCmd "$syslog_loc" >> "$optmsg"
         $rmCmd -f "$syslog_loc" "${syslog_loc}-1"
-        $lnCmd -s "$optmsg" "$syslog_loc"
+        $lnCmd -snf "$optmsg" "$syslog_loc"
         echo "$log1Msg" > "${syslog_loc}-1"
     fi
 
@@ -154,8 +155,8 @@ kill_logger()
     then
         # If syslogd is writing to /jffs, then ensure logfiles in /tmp #
         # are properly linked, in case something goes looking there #
-        [ ! -L "$tmplog" ] && $lnCmd -s "$optmsg" "$tmplog"
-        [ ! -L "${tmplog}-1" ] && $lnCmd -s "${syslog_loc}-1" "${tmplog}-1"
+        [ ! -L "$tmplog" ] && $lnCmd -snf "$optmsg" "$tmplog"
+        [ ! -L "${tmplog}-1" ] && $lnCmd -snf "${syslog_loc}-1" "${tmplog}-1"
     fi
 
     # Create /opt/var/run/syslog-ng/ directory if it doesn't exist #

@@ -1,6 +1,3 @@
 /opt/var/log/afpd.log {
    rotate 2
-   postrotate
-       /usr/bin/killall -HUP syslog-ng
-   endscript
 }

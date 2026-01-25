@@ -1,12 +1,12 @@
 #############################################################################
-# syslog-ng.conf customized for scribe on Asuswrt-Merlin firmware
-# compare to /opt/share/syslog-ng/examples/syslog-ng.conf-opkg for differences from Entware distribution
+# syslog-ng.conf customized for Scribe on Asuswrt-Merlin firmware
+# Compare to /opt/share/syslog-ng/examples/syslog-ng.conf-opkg for differences from the Entware distribution
 #
 # syslog-ng documentation: https://www.syslog-ng.com/technical-documents/list/syslog-ng-open-source-edition
 #
 # Release notes: https://github.com/syslog-ng/syslog-ng/releases 
 
-@version: 4.1
+@version: 4.7
 #@include "scl.conf" # uncomment this line to for additional functionality, see syslog-ng documentation
 @include "/opt/etc/syslog-ng.d/" # Put any customization files in this directory
 
@@ -14,8 +14,8 @@ options {
     chain_hostnames(no); # Enable or disable the chained hostname format.
     create_dirs(yes);
     keep_hostname(yes); # Enable or disable hostname rewriting.
-    log_fifo_size(256); # The number of messages that the output queue can store.
-    log_msg_size(16384); # Maximum length of a message in bytes.
+    log_fifo_size(1024); # The number of messages that the output queue can store.
+    log_msg_size(2048); # Maximum length of a message in bytes.
     stats(freq(21600)); # The period between two STATS messages sent by syslog-ng, containing statistics about dropped logs in seconds; 0 disables. (21,600 seconds = 6 hours)
     flush_lines(0); # How many lines are flushed to a destination at a time.
     use_fqdn(no); # Add Fully Qualified Domain Name instead of short hostname.
@@ -28,23 +28,23 @@ source src {
     unix-dgram("/dev/log" so_rcvbuf(65536) flags(syslog-protocol));
     file("/proc/kmsg" program_override("kernel") flags(kernel));
     internal();
-#    udp(ip(192.168.x.y) port(514)); # uncomment this line to pass all network messages through syslog-ng filters
+#OFF# udp(ip(192.168.x.y) port(514)); # uncomment this line to pass all network messages through syslog-ng filters
 };
 
 # if you only want to pass network messages through some syslog-ng filters, uncomment the source line below
 # then add "source(net);" to the log statement in any filter you want to pass network messages through
-#source net { udp(ip(192.168.x.y) port(514)); };
+#OFF# source net { udp(ip(192.168.x.y) port(514)); };
 
 # set the filename for the default log file - anything not filtered out will end up here
 destination messages { file("/opt/var/log/messages"); };
 
 # to send log messages to the local network, uncomment the destination line below
 # then add "destination(log_server);" to the log statement in any filter you want to pass network messages through
-#destination log_server { udp("192.168.x.y" port(514)); };
+#OFF# destination log_server { udp("192.168.x.y" port(514)); };
 
 log {
     source(src);
-#    source(net); # uncomment this and "source net" function above to get udp log messages from local network
+#OFF# source(net); # uncomment this and "source net" function above to get udp log messages from local network
     destination(messages);
-#    destination(log_server); # uncomment this and "destination log_server" function above to send udp log messages to local network
+#OFF# destination(log_server); # uncomment this and "destination log_server" function above to send udp log messages to local network
 };

@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Jan-15
+# Last Modified: 2026-Jan-25
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -34,9 +34,9 @@
 #################################################################
 
 readonly script_name="scribe"
-readonly scribe_ver="v3.2.7"
-readonly scriptVer_TAG="26011523"
-scribe_branch="master"
+readonly scribe_ver="v3.2.8"
+readonly scriptVer_TAG="26012523"
+scribe_branch="develop"
 script_branch="$scribe_branch"
 
 # Ensure firmware binaries are used, not Entware #
@@ -1723,7 +1723,7 @@ PreInstall_Check()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Dec-05] ##
+## Modified by Martinski W. [2026-Jan-25] ##
 ##----------------------------------------##
 Menu_Install()
 {
@@ -1736,6 +1736,8 @@ Menu_Install()
         Do_Install "$sng" "FORCE"
     fi
     echo
+    rm -f "$syslogNg_WaitnSEM_FPath"
+    echo "1" > "$syslogNg_StartSEM_FPath"
     $S01sng_init start
 
     if [ ! -e "$lr_loc" ]
@@ -2008,7 +2010,7 @@ Menu_Filters()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Jul-07] ##
+## Modified by Martinski W. [2026-Jan-25] ##
 ##----------------------------------------##
 Menu_Update()
 {
@@ -2041,6 +2043,8 @@ Menu_Update()
         Copy_SysLogNg_Top_Config "$@"
         Copy_LogRotate_Global_Options "$@"
         printf "\n$white %s updated!$std\n" "$script_name"
+        rm -f "$syslogNg_WaitnSEM_FPath"
+        echo "1" > "$syslogNg_StartSEM_FPath"
         sh "$script_loc" filters gotzip nologo
         sh "$script_loc" status nologo
         run_scribe=true

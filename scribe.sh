@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Jan-25
+# Last Modified: 2026-Jan-29
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -34,8 +34,8 @@
 #################################################################
 
 readonly script_name="scribe"
-readonly scribe_ver="v3.2.8"
-readonly scriptVer_TAG="26012523"
+readonly scribe_ver="v3.2.9"
+readonly scriptVer_TAG="26012900"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -196,6 +196,7 @@ readonly syslogNg_ConfName=${syslogNgStr}.conf
 readonly syslogNg_TopConfig="/opt/etc/$syslogNg_ConfName"
 readonly syslogNg_WaitnSEM_FPath="${TEMPdir}/scribe_SysLogNg.WAITN.SEM"
 readonly syslogNg_StartSEM_FPath="${TEMPdir}/scribe_SysLogNg.START.SEM"
+readonly syslogD_InitRebootLogFPath="${optVarLogDir}/syslog_init_reboot.LOG"
 readonly sysLogLinesMAX=20480
 readonly sysLogMsgeSizeMAX=2048
 sysLogFiFoSizeMIN=1024
@@ -1064,15 +1065,20 @@ _SysLogMsgSizeFromConfig_()
     if [ -n "$msgSizeNum" ] && [ "$msgSizeNum" -gt "$sysLogMsgeSizeMAX" ]
     then msgSizeOK=false
     fi
-    "$msgSizeOK" && return 0
 
-    if [ "$1" = "check" ]
-    then return 1
-    elif [ "$1" = "update" ]
-    then
-        sed -i "s/log_msg_size($msgSizeNum)/log_msg_size($sysLogMsgeSizeMAX)/g" "$sng_conf"
-        return 0
-    fi
+    case "$1" in
+        check)
+            "$msgSizeOK" && return 0 || return 1
+            ;;
+        update)
+            "$msgSizeOK" && return 1  #NO Change#
+            sed -i "s/log_msg_size($msgSizeNum)/log_msg_size($sysLogMsgeSizeMAX)/g" "$sng_conf"
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 ##-------------------------------------##
@@ -1089,25 +1095,30 @@ _SysLogFiFoSizeFromConfig_()
     if [ -n "$fifoSizeNum" ] && [ "$fifoSizeNum" -lt "$sysLogFiFoSizeMIN" ]
     then fifoSizeOK=false
     fi
-    "$fifoSizeOK" && return 0
 
-    if [ "$1" = "check" ]
-    then return 1
-    elif [ "$1" = "update" ]
-    then
-        sed -i "s/log_fifo_size($fifoSizeNum)/log_fifo_size($sysLogFiFoSizeMIN)/g" "$sng_conf"
-        return 0
-    fi
+    case "$1" in
+        check)
+            "$fifoSizeOK" && return 0 || return 1
+            ;;
+        update)
+            "$fifoSizeOK" && return 1  #NO Change#
+            sed -i "s/log_fifo_size($fifoSizeNum)/log_fifo_size($sysLogFiFoSizeMIN)/g" "$sng_conf"
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2026-Jan-03] ##
+## Modified by Martinski W. [2026-Jan-29] ##
 ##----------------------------------------##
 SysLogNg_Config_Sync()
 {
     local sng_conf_vtag1  sng_conf_vtag2  sng_version_str  sng_conf_verstr
 
-    printf "$white %34s" "$( strip_path "$sng_conf" ) version check ..."
+    printf " ${white}%34s" "$(strip_path "$sng_conf") options check ..."
     sng_conf_vtag1="@version:"
     sng_conf_vtag2="${sng_conf_vtag1}[[:blank:]]*"
     sng_version_str="$( $sng --version | grep -m1 "$sng" | grep -oE '[0-9]{1,2}([_.][0-9]{1,2})' )"
@@ -1118,29 +1129,42 @@ SysLogNg_Config_Sync()
        ! _SysLogFiFoSizeFromConfig_ check || \
        [ "$sng_version_str" != "$sng_conf_verstr" ]
     then
-        printf "$red out of sync! (%s) $std\n" "$sng_conf_verstr"
-        printf "$cyan *** Updating %s and restarting %s *** $std\n" "$( strip_path "$sng_conf" )" "$sng"
+        printf " ${red}out of sync!${std}\n"
+        printf " ${cyan}*** Updating %s and restarting %s ***${std}\n" "$(strip_path "$sng_conf")" "$sng"
         $S01sng_init stop
         old_doc="doc\/syslog-ng-open"
         new_doc="list\/syslog-ng-open-source-edition"
         sed -i "s/$old_doc.*/$new_doc/" "$sng_conf"
         stats_freq="$( grep -m1 'stats_freq(' "$sng_conf" | cut -d ';' -f 1 | grep -oE '[0-9]*' )"
         [ -n "$stats_freq" ] && sed -i "s/stats_freq($stats_freq)/stats(freq($stats_freq))/g" "$sng_conf"
+
         if [ -n "$sng_version_str" ] && \
            [ -n "$sng_conf_verstr" ] && \
            [ "$sng_version_str" != "$sng_conf_verstr" ]
         then
+            printf "\n ${red}%34s${std}\n" "version number out of sync!"
             sed -i "s/^${sng_conf_vtag2}${sng_conf_verstr}.*/$sng_conf_vtag1 $sng_version_str/" "$sng_conf"
+            printf " ${white}%34s" "$(strip_path "$sng_conf") version ..."
+            printf " ${yellow}updated! (%s)${std}\n" "$sng_version_str"
+            logger -t "$script_name" "$(strip_path "$sng_conf") version number updated ($sng_version_str)!"
         fi
-        _SysLogMsgSizeFromConfig_ update
-        _SysLogFiFoSizeFromConfig_ update
+        if _SysLogMsgSizeFromConfig_ update
+        then
+            printf "\n ${red}%34s${std}\n" "Log message size out of sync!"
+            printf " ${white}%34s" "$(strip_path "$sng_conf") log message size ..."
+            printf " ${yellow}updated! (%d)${std}\n" "$sysLogMsgeSizeMAX"
+        fi
+        if _SysLogFiFoSizeFromConfig_ update
+        then
+            printf "\n ${red}%34s${std}\n" "Log FIFO size out of sync!"
+            printf " ${white}%34s" "$(strip_path "$sng_conf") log FIFO size ..."
+            printf " ${yellow}updated! (%d)${std}\n" "$sysLogFiFoSizeMIN"
+        fi
+        echo
         $S01sng_init start
         Restart_uiScribe
-        printf "$white %34s" "$( strip_path "$sng_conf" ) version ..."
-        printf "$yellow updated! (%s) $std\n" "$sng_version_str"
-        logger -t "$script_name" "$( strip_path "$sng_conf" ) version number updated ($sng_version_str)!"
     else
-        printf "$green in sync. (%s) $std\n" "$sng_version_str"
+        printf " ${green}in sync. (v%s)${std}\n" "$sng_version_str"
     fi
 }
 
@@ -1737,7 +1761,7 @@ Menu_Install()
     fi
     echo
     rm -f "$syslogNg_WaitnSEM_FPath"
-    echo "1" > "$syslogNg_StartSEM_FPath"
+    echo '1' > "$syslogNg_StartSEM_FPath"
     $S01sng_init start
 
     if [ ! -e "$lr_loc" ]
@@ -1819,9 +1843,9 @@ StopSyslogNg()
     fi
     tail -n $lastNLines "$optmsg" > "$syslog_loc"
 
-    if ! "$usbUnmountCaller"
-    then rm -f "$messagesLogSAVED"
-    else mv -f "$optmsg" "$messagesLogSAVED"
+    if "$usbUnmountCaller"
+    then mv -f "$optmsg" "$messagesLogSAVED"
+    else rm -f "$messagesLogSAVED" "$syslogD_InitRebootLogFPath"
     fi
     ln -snf "$syslog_loc" "$optmsg"
 
@@ -2044,7 +2068,7 @@ Menu_Update()
         Copy_LogRotate_Global_Options "$@"
         printf "\n$white %s updated!$std\n" "$script_name"
         rm -f "$syslogNg_WaitnSEM_FPath"
-        echo "1" > "$syslogNg_StartSEM_FPath"
+        echo '1' > "$syslogNg_StartSEM_FPath"
         sh "$script_loc" filters gotzip nologo
         sh "$script_loc" status nologo
         run_scribe=true
@@ -2842,7 +2866,8 @@ then
 fi
 
 if [ "$action" != "help" ] && \
-   [ "$action" != "about" ]
+   [ "$action" != "about" ] && \
+   [ "$action" != "install" ]
 then
     # Read or create config file #
     Read_Config

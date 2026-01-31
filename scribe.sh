@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Jan-29
+# Last Modified: 2026-Jan-30
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -35,7 +35,7 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.9"
-readonly scriptVer_TAG="26012900"
+readonly scriptVer_TAG="26013023"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -196,10 +196,10 @@ readonly syslogNg_ConfName=${syslogNgStr}.conf
 readonly syslogNg_TopConfig="/opt/etc/$syslogNg_ConfName"
 readonly syslogNg_WaitnSEM_FPath="${TEMPdir}/scribe_SysLogNg.WAITN.SEM"
 readonly syslogNg_StartSEM_FPath="${TEMPdir}/scribe_SysLogNg.START.SEM"
-readonly syslogD_InitRebootLogFPath="${optVarLogDir}/syslog_init_reboot.LOG"
+readonly syslogD_InitRebootLogFPath="${optVarLogDir}/syslogd.ScribeInitReboot.LOG"
 readonly sysLogLinesMAX=20480
 readonly sysLogMsgeSizeMAX=2048
-sysLogFiFoSizeMIN=1024
+sysLogFiFoSizeMIN=1600
 
 # color constants #
 readonly red="\033[1;31m"
@@ -285,7 +285,8 @@ delfr(){ rm -fr "$1"; }
 
 same_same(){ if [ "$( md5_file "$1" )" = "$( md5_file "$2" )" ]; then true; else false; fi; }
 
-date_stamp(){ [ -e "$1" ] && mv -f "$1" "$1-$( date -Iseconds | cut -c 1-19 )"; }
+AppendDateTimeStamp()
+{ [ -e "$1" ] && mv -f "$1" "${1}_$(date +'%Y-%m-%d_T%H%M%S')"; }
 
 SyslogNg_Running(){ if [ -n "$( pidof $sng )" ]; then true; else false; fi; }
 
@@ -501,7 +502,7 @@ Create_Config()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Nov-29] ##
+## Modified by Martinski W. [2026-Jan-30] ##
 ##----------------------------------------##
 Read_Config()
 {
@@ -517,6 +518,10 @@ Read_Config()
     then
         _Config_Option_Update_ LR_CRONJOB_HOUR 24
     fi
+    if ! _Config_Option_Check_ FILTER_INIT_REBOOT_LOG
+    then
+        _Config_Option_Update_ FILTER_INIT_REBOOT_LOG true
+    fi
 
     # Set correct permissions to avoid "world-readable" status #
     if [ "$action" != "debug" ] && \
@@ -531,7 +536,7 @@ Read_Config()
 Update_File()
 {
     if [ $# -gt 2 ] && [ "$3" = "backup" ]
-    then date_stamp "$2"
+    then AppendDateTimeStamp "$2"
     fi
     cp -fp "$1" "$2"
 }
@@ -1180,7 +1185,7 @@ SysLogNg_Config_SyntaxCheck()
 ##----------------------------------------##
 ## Modified by Martinski W. [2025-Jul-07] ##
 ##----------------------------------------##
-get_vers()
+GetScribeVersion()
 {
     # only get scribe from github once #
     script_md5="$( md5_file "$script_loc")"
@@ -1200,7 +1205,7 @@ get_vers()
     delfr "$script_tmp_file"
 }
 
-prt_vers()
+ShowScribeVersion()
 {
     printf "\n$white %34s$green %s \n" "$script_name installed version:" "$scriptVer_long"
     printf "$white %34s$green %s $std\n" "$script_name GitHub version:" "$githubVer_long"
@@ -1218,7 +1223,7 @@ prt_vers()
             printf "$green %40s" "$script_name is up to date!"
             ;;
     esac
-    printf "$std\n\n"
+    printf "${std}\n\n"
 }
 
 # Install default file in /opt/etc/$1.d #
@@ -1534,7 +1539,7 @@ Menu_Status()
 {
     Check_SysLogNg
     SysLogd_Check
-    printf "\n$magenta checking system for necessary %s hooks ...\n\n" "$script_name"
+    printf "\n ${magenta}checking system for necessary %s hooks ...\n\n" "$script_name"
     sed_SysLogNg_Init
     if SyslogNg_Running
     then sed_srvcEvent
@@ -1546,11 +1551,11 @@ Menu_Status()
         LogRotate_CronJob_Check
         Check_Dir_Links
     fi
-    printf "\n$magenta checking %s configuration ...\n\n" "$sng"
+    printf "\n ${magenta}checking %s configuration ...\n\n" "$sng"
     SysLogNg_Config_Sync
     SysLogNg_Config_SyntaxCheck
-    get_vers
-    prt_vers
+    GetScribeVersion
+    ShowScribeVersion
 }
 
 sng_ver_chk()
@@ -1566,16 +1571,20 @@ sng_ver_chk()
     fi
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2026-Jan-30] ##
+##----------------------------------------##
 Setup_SysLogNG()
 {
-    printf "\n$magenta setting up %s ...\n$std" "$sng"
+    printf "\n ${magenta}setting up %s ...${std}\n" "$sng"
     Copy_SysLogNg_RcFunc
+    Copy_LogRotate_Global_Options force
     sed_SysLogNg_Init
     sed_srvcEvent
     sed_unMount
     if [ "$( md5_file "$sng_share/examples/${sng}.conf-scribe" )" != "$( md5_file "$sng_conf" )" ]
     then
-        printf "$white %34s" "updating $( strip_path "$sng_conf" ) ..."
+        printf " ${white}%34s" "updating $(strip_path "$sng_conf") ..."
         Update_File "$sng_share/examples/${sng}.conf-scribe" "$sng_conf" "backup"
         finished
     fi
@@ -1747,7 +1756,7 @@ PreInstall_Check()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2026-Jan-25] ##
+## Modified by Martinski W. [2026-Jan-30] ##
 ##----------------------------------------##
 Menu_Install()
 {
@@ -1762,6 +1771,7 @@ Menu_Install()
     echo
     rm -f "$syslogNg_WaitnSEM_FPath"
     echo '1' > "$syslogNg_StartSEM_FPath"
+    printf '' > "$syslogD_InitRebootLogFPath"
     $S01sng_init start
 
     if [ ! -e "$lr_loc" ]
@@ -1811,18 +1821,12 @@ Menu_Restart()
     Restart_uiScribe
 }
 
-##----------------------------------------##
-## Modified by Martinski W. [2026-Jan-11] ##
-##----------------------------------------##
-StopSyslogNg()
+##-------------------------------------##
+## Added by Martinski W. [2026-Jan-30] ##
+##-------------------------------------##
+_MoveLogMsgsToSystemLogFile_()
 {
     local lastNLines  logNumLines  logFileSize
-    local messagesLogSAVED="${optmsg}.SAVED.LOG"
-
-    printf "\n ${white}Stopping %s...\n" "$sng"
-    $S01sng_init stop
-    # Remove any syslog links #
-    Clear_Syslog_Links
 
     ## Do NOT move very large files into JFFS/TMPFS ##
     lastNLines=100
@@ -1842,10 +1846,28 @@ StopSyslogNg()
         fi
     fi
     tail -n $lastNLines "$optmsg" > "$syslog_loc"
+}
 
-    if "$usbUnmountCaller"
-    then mv -f "$optmsg" "$messagesLogSAVED"
-    else rm -f "$messagesLogSAVED" "$syslogD_InitRebootLogFPath"
+##----------------------------------------##
+## Modified by Martinski W. [2026-Jan-30] ##
+##----------------------------------------##
+StopSyslogNg()
+{
+    local messagesLogSAVED="${optmsg}.Scribe_SAVED.LOG"
+
+    printf "\n ${white}Stopping %s...\n" "$sng"
+    $S01sng_init stop
+    # Remove any syslog links #
+    Clear_Syslog_Links
+
+    ##OFF##_MoveLogMsgsToSystemLogFile_
+    printf '' > "$syslog_loc"
+    printf '' > "${syslog_loc}-1"
+    printf '' > "$syslogD_InitRebootLogFPath"
+
+    if [ -s "$optmsg" ]
+    then
+        mv -f "$optmsg" "$messagesLogSAVED"
     fi
     ln -snf "$syslog_loc" "$optmsg"
 
@@ -2034,7 +2056,7 @@ Menu_Filters()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2026-Jan-25] ##
+## Modified by Martinski W. [2026-Jan-30] ##
 ##----------------------------------------##
 Menu_Update()
 {
@@ -2069,11 +2091,12 @@ Menu_Update()
         printf "\n$white %s updated!$std\n" "$script_name"
         rm -f "$syslogNg_WaitnSEM_FPath"
         echo '1' > "$syslogNg_StartSEM_FPath"
+        printf '' > "$syslogD_InitRebootLogFPath"
         sh "$script_loc" filters gotzip nologo
         sh "$script_loc" status nologo
         run_scribe=true
     else
-        printf "\n$white        *** %s$red not$white updated! *** $std\n\n" "$script_name"
+        printf "\n$white        *** %s ${red}not${white} updated! *** ${std}\n\n" "$script_name"
     fi
 }
 
@@ -2084,8 +2107,8 @@ Update_Version()
 {
    if SyslogNg_Running
    then
-       get_vers
-       prt_vers
+       GetScribeVersion
+       ShowScribeVersion
        Menu_Update "$@"
    else
        not_recog=true
@@ -2131,7 +2154,7 @@ Gather_Debug()
     delfr "$script_debug" "$debugTarball"
 
     printf "\n$white gathering debugging information...\n"
-    get_vers
+    GetScribeVersion
 
     {
         printf "%s\n" "$debug_sep"
@@ -2239,7 +2262,7 @@ Gather_Debug()
 menu_backup()
 {
     printf "\n$white Backing up %s and %s Configurations ... \n" "$sng" "$lr"
-    date_stamp "$script_bakname"
+    AppendDateTimeStamp "$script_bakname"
     tar -zcvf "$script_bakname" "$sng_conf" "$sngd_d" "$lr_conf" "$lrd_d" "$config_d"
     printf "\n$std Backup data is stored in $cyan%s$std.\n\n" "$script_bakname"
 }
@@ -2305,7 +2328,9 @@ _LogDebugMsg_()
    then echo "${timeNow}: $1"  > "$logFilePath"
    else echo "${timeNow}: $1" >> "$logFilePath"
    fi
-   logger -t "$logTagStr" "$1"
+   if [ $# -gt 1 ] && [ "$2" != "false" ]
+   then logger -t "$logTagStr" "$1"
+   fi
 }
 
 trap '' HUP
@@ -2350,24 +2375,23 @@ do
         then sysLogNg_Param=start
         else sysLogNg_Param=restart
         fi
-        _LogDebugMsg_ "Calling [$S01syslogNg_srvc $sysLogNg_Param]..."
 
         rm -f "$syslogNg_WaitnSEM_FPath"
+        _LogDebugMsg_ "Calling [$S01syslogNg_srvc $sysLogNg_Param]..." true
         echo "$cntSleepSecs" > "$syslogNg_StartSEM_FPath"
-        "$S01syslogNg_srvc" "$sysLogNg_Param"
-
-        _LogDebugMsg_ "Exiting Background Loop [$cntSleepSecs][$$]..."
+        nohup "$S01syslogNg_srvc" "$sysLogNg_Param" &
+        _LogDebugMsg_ "Exiting Background Loop [$cntSleepSecs][$$]..." true
         break
     fi
     if [ "$cntSleepSecs" -ge "$sleepSecsMAX" ]
     then
         rm -f "$syslogNg_WaitnSEM_FPath"
-        _LogDebugMsg_ "Exiting Background Loop [$cntSleepSecs][$$]..."
-        break  #Escape WITHOUT starting service#
+        _LogDebugMsg_ "Exiting Background Loop [$cntSleepSecs][$$]..." true
+        break  #Escape WITHOUT starting service??#
     fi
     if "$timeCheckStatus"
     then
-        _LogDebugMsg_ "Sleeping $checkSecs secs [$cntSleepSecs][$$]..."
+        _LogDebugMsg_ "Sleeping $checkSecs secs [$cntSleepSecs][$$]..." true
     fi
     sleep "$sleepSecs"
     cntSleepSecs="$((cntSleepSecs + sleepSecs))"
@@ -2378,7 +2402,7 @@ do
     fi
 done
 
-_LogDebugMsg_ "End of Background Script [$scriptFName][$$]"
+_LogDebugMsg_ "End of Background Script [$scriptFName][$$]" false
 rm -f "$0"
 
 #EOF#
@@ -2513,7 +2537,6 @@ _Launch_SysLoggerCheck_BGScript_()
     fi
 
     "$bgScript_FPath" & taskPID=$!
-    logger -st "$logTag" -p 5 "INFO: Background script [$bgScript_FName] started. PID: [$taskPID]"
 }
 
 ##----------------------------------------##
@@ -2854,7 +2877,6 @@ SetUpRepoBranchVars
 ## Increase FIFO queue size if 1GB RAM or more ##
 if _HasRouterMoreThan512MBtotalRAM_
 then sysLogFiFoSizeMIN=2048
-else sysLogFiFoSizeMIN=1024
 fi
 
 if ! SyslogD_Running && ! SyslogNg_Running && \

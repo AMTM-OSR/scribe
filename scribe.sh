@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Jan-30
+# Last Modified: 2026-Jan-31
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -35,7 +35,7 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.9"
-readonly scriptVer_TAG="26013023"
+readonly scriptVer_TAG="26013123"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -1817,7 +1817,7 @@ Menu_Restart()
         printf "\n ${white}%s ${red}NOT${white} running! ${yellow}Starting...${std}\n" "$sng"
         $S01sng_init start
     fi
-    sleep 1  #Allow time to start up#
+    sleep 2  #Allow time to start up#
     Restart_uiScribe
 }
 
@@ -2117,7 +2117,7 @@ Update_Version()
 
 menu_forgrnd()
 {
-    restrt=false
+    local doStart=false
     if SyslogNg_Running
     then
         warning_sign
@@ -2126,20 +2126,20 @@ menu_forgrnd()
         printf " Debugging mode is intended for troubleshooting when\n"
         printf " %s will not start.\n\n" "$sng"
         printf " Are you certain you wish to start debugging mode [y|n]? $std"
-        if ! Yes_Or_No; then return; fi
-        restrt=true
+        if ! Yes_Or_No; then return 1; fi
+        doStart=true
     fi
     printf "\n$yellow NOTE: If there are no errors, debugging mode will\n"
     printf "       continue indefinitely. If this happens, type\n"
     printf "       <Ctrl-C> to halt debugging mode output.\n\n"
     PressEnterTo "start:"
-    if "$restrt"
+    if "$doStart"
     then $S01sng_init stop; echo
     fi
     trap '' 2
     $sng_loc -Fevd
     trap - 2
-    if "$restrt"
+    if "$doStart"
     then echo ; $S01sng_init start
     fi
     echo
@@ -2980,13 +2980,16 @@ case "$action" in
         then
             Menu_Restart
             Menu_Status
+            cliParamCheck=false
         fi
         ;;
 
     #Stop syslog-ng & logrotate Cron Job#
     stop)
         if SyslogNg_Running || "$usbUnmountCaller"
-        then Menu_Stop
+        then
+            Menu_Stop
+            cliParamCheck=false
         fi
         ;;
 
@@ -3077,9 +3080,7 @@ esac
 if ! "$scribeInstalled" && "$cliParamCheck"
 then
     printf "\n${yellow} %s ${white}is NOT installed, command \"%s\" not valid!${std}\n\n" "$script_name" "$action"
-elif ! SyslogNg_Running && \
-     "$cliParamCheck" && \
-     [ "$action" != "stop" ]
+elif ! SyslogNg_Running && "$cliParamCheck"
 then
     printf "\n${yellow} %s ${white}is NOT running, command \"%s\" not valid!${std}\n\n" "$sng" "$action"
 else

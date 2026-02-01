@@ -35,24 +35,26 @@ source src {
                   recursive(no) max-files(1) follow_freq(1)
                   log_iw_size(1200) log_fetch_limit(1000) flags(syslog-protocol));
     internal();
-# uncomment this line to pass all network messages through syslog-ng filters #
-#OFF# udp(ip(192.168.x.y) port(514));
+# uncomment the line below to pass ALL network log messages through syslog-ng filters #
+#OFF# udp(port(514) flags(syslog-protocol));
 };
 
 # if you only want to pass network messages through some syslog-ng filters, uncomment the source line below
-# then add "source(net);" to the log statement in any filter you want to pass network messages through
-#OFF# source net { udp(ip(192.168.x.y) port(514)); };
+# then add "source(s_net);" to the log statement in any filter you want to pass network messages through
+#OFF# source s_net { udp(port(514) flags(syslog-protocol)); };
 
-# set the filename for the default log file - anything not filtered out will end up here
+# set the filename for the default log file - anything not filtered out will end up here #
 destination messages { file("/opt/var/log/messages"); };
 
-# to send log messages to the local network, uncomment the destination line below
+# to send log messages to the local network, uncomment the destination line below #
 # then add "destination(log_server);" to the log statement in any filter you want to pass network messages through
 #OFF# destination log_server { udp("192.168.x.y" port(514)); };
 
 log {
     source(src);
-#OFF# source(net); # uncomment this and "source net" function above to get udp log messages from local network
+# uncomment this and "source s_net" function above to get udp log messages from local network #
+#OFF# source(s_net);
     destination(messages);
-#OFF# destination(log_server); # uncomment this and "destination log_server" function above to send udp log messages to local network
+# uncomment this and "destination log_server" function above to send udp log messages to local network #
+#OFF# destination(log_server);
 };

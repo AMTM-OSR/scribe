@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Jan-31
+# Last Modified: 2026-Feb-07
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -35,7 +35,7 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.9"
-readonly scriptVer_TAG="26013123"
+readonly scriptVer_TAG="26020700"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -277,20 +277,20 @@ PressEnterTo()
 VersionStrToNum()
 { echo "$1" | sed 's/v//; s/_/./' | awk -F. '{ printf("%d%03d%02d\n", $1, $2, $3); }'; }
 
-md5_file(){ md5sum "$1" | awk '{ printf( $1 ); }'; }
+MD5_Hash(){ md5sum "$1" | awk -F' ' '{print $1}' ; }
 
 strip_path(){ basename "$1"; }
 
 delfr(){ rm -fr "$1"; }
 
-same_same(){ if [ "$( md5_file "$1" )" = "$( md5_file "$2" )" ]; then true; else false; fi; }
+Same_MD5_Hash(){ if [ "$(MD5_Hash "$1")" = "$(MD5_Hash "$2")" ]; then true; else false; fi; }
 
 AppendDateTimeStamp()
-{ [ -e "$1" ] && mv -f "$1" "${1}_$(date +'%Y-%m-%d_T%H%M%S')"; }
+{ [ -e "$1" ] && mv -f "$1" "${1}_$(date +'%Y-%m-%d_T%H%M%S')" ; }
 
-SyslogNg_Running(){ if [ -n "$( pidof $sng )" ]; then true; else false; fi; }
+SyslogNg_Running(){ if [ -n "$(pidof "$sng")" ]; then true; else false; fi; }
 
-SyslogD_Running(){ if [ -n "$( pidof $sld )" ]; then true; else false; fi; }
+SyslogD_Running(){ if [ -n "$(pidof "$sld")" ]; then true; else false; fi; }
 
 ##-------------------------------------##
 ## Added by Martinski W. [2025-Nov-30] ##
@@ -535,7 +535,7 @@ Read_Config()
 ##----------------------------------------##
 Update_File()
 {
-    if [ $# -gt 2 ] && [ "$3" = "backup" ]
+    if [ $# -gt 2 ] && [ "$3" = "BACKUP" ]
     then AppendDateTimeStamp "$2"
     fi
     cp -fp "$1" "$2"
@@ -652,7 +652,7 @@ Reload_SysLogNg_Config()
 
 Copy_SysLogNg_RcFunc()
 {
-    printf "$white copying %s to %s ...$std" "$rcfunc_sng" "$init_d"
+    printf " ${white}copying %s to %s ...$std" "$rcfunc_sng" "$init_d"
     cp -fp "${unzip_dirPath}/init.d/$rcfunc_sng" "$init_d/"
     chmod 644 "$rcfunc_loc"
     finished
@@ -664,6 +664,7 @@ Copy_SysLogNg_RcFunc()
 Copy_SysLogNg_Top_Config()
 {
     local forceUpdate=false
+    local diffFile="/opt/tmp/syslogNG_diffs.TEMP.txt"
     local srceFile="${unzip_dirPath}/${syslogNgStr}.share/${syslogNg_ConfName}-scribe"
 
     [ ! -s "$srceFile" ] && return 1
@@ -674,11 +675,31 @@ Copy_SysLogNg_Top_Config()
 
     for destFile in "$syslogNg_TopConfig" "${syslogNg_ExamplesDir}/${syslogNg_ConfName}-scribe"
     do
-        if [ ! -s "$destFile" ] || "$forceUpdate"
+        if [ ! -s "$destFile" ] || [ "$destFile" != "$syslogNg_TopConfig" ]
         then
             cp -fp "$srceFile" "$destFile"
-            chmod 644 "$destFile"
+        elif "$forceUpdate" || ! Same_MD5_Hash "$srceFile" "$destFile"
+        then
+            diff -U0 "$srceFile" "$destFile" 2>/dev/null | \
+            grep -Ev "^(\-\-\-|\+\+\+)" | grep -E "^(\-|\+)" | \
+            grep -Ev "^(\-|\+)[[:blank:]]+log_fifo_size\(" > "$diffFile"
+            if [ -s "$diffFile" ] && \
+               grep -qE "^(\-|\+)" "$diffFile" && \
+               [ "$(wc -l < "$diffFile")" -gt 0 ]
+            then
+                printf " ${yellow}updating $destFile ..."
+                Update_File "$srceFile" "$destFile" "BACKUP"
+                finished
+                printf " ${red}------------\n ***NOTICE***\n ------------${std}\n"
+                printf " ${yellow}The file ${green}/opt/etc/syslog-ng.conf${yellow} has been replaced with"
+                printf " a newer version.\n This means that any custom configuration options that you may"
+                printf " have added\n or modified in the previously installed file are now removed.\n A backup"
+                printf " of the previous file was created in the '${green}/opt/etc${yellow}' directory.${std}\n\n"
+                PressEnterTo "continue..."
+            fi
+            rm -f "$diffFile"
         fi
+        chmod 644 "$destFile"
     done
 }
 
@@ -1188,7 +1209,7 @@ SysLogNg_Config_SyntaxCheck()
 GetScribeVersion()
 {
     # only get scribe from github once #
-    script_md5="$( md5_file "$script_loc")"
+    script_md5="$(MD5_Hash "$script_loc")"
     delfr "$script_tmp_file"
     curl -LSs --retry 4 --retry-delay 5 --retry-connrefused "$script_repoFile" -o "$script_tmp_file"
     [ ! -e "$script_tmp_file" ] && \
@@ -1196,7 +1217,7 @@ GetScribeVersion()
     github_ver="$( grep -m1 "scribe_ver=" "$script_tmp_file" | grep -oE "$scribeVerRegExp" )"
     github_branch="$( grep -m1 "scribe_branch=" "$script_tmp_file" | awk -F\" '{ printf ( $2 ); }'; )" 
     githubVer_long="$github_ver ($github_branch)"
-    github_md5="$( md5_file "$script_tmp_file")"
+    github_md5="$(MD5_Hash "$script_tmp_file")"
     new_vers="none"
     if [ "$( VersionStrToNum "$github_ver" )" -lt "$( VersionStrToNum "$scribe_ver" )" ]; then new_vers="older"
     elif [ "$( VersionStrToNum "$github_ver" )" -gt "$( VersionStrToNum "$scribe_ver" )" ]; then new_vers="major"
@@ -1207,20 +1228,20 @@ GetScribeVersion()
 
 ShowScribeVersion()
 {
-    printf "\n$white %34s$green %s \n" "$script_name installed version:" "$scriptVer_long"
-    printf "$white %34s$green %s $std\n" "$script_name GitHub version:" "$githubVer_long"
+    printf "\n ${white}%34s ${green}%s\n" "$script_name installed version:" "$scriptVer_long"
+    printf " ${white}%34s ${green}%s${std}\n" "$script_name GitHub version:" "$githubVer_long"
     case "$new_vers" in
         older)
-            printf "$red      Local %s version greater than GitHub version!" "$script_name"
+            printf "      ${red}Local %s version GREATER THAN GitHub version!" "$script_name"
             ;;
         major)
-            printf "$yellow %45s" "New version available for $script_name"
+            printf " ${yellow}%45s" "New version available for $script_name"
             ;;
         minor)
-            printf "$blue %45s" "Minor patch available for $script_name"
+            printf " ${blue}%45s" "Minor patch available for $script_name"
             ;;
         none)
-            printf "$green %40s" "$script_name is up to date!"
+            printf " ${green}%40s" "$script_name is up to date!"
             ;;
     esac
     printf "${std}\n\n"
@@ -1260,7 +1281,7 @@ setup_exmpls()
         if [ ! -e "$shrfile" ] || [ "$2" = "ALL" ]
         then
             Update_File "$exmpl" "$shrfile"
-        elif ! same_same "$exmpl" "$shrfile"
+        elif ! Same_MD5_Hash "$exmpl" "$shrfile"
         then
             printf " updating %s\n" "$shrfile"
             Update_File "$exmpl" "$shrfile"
@@ -1269,7 +1290,7 @@ setup_exmpls()
 
     if [ -e "$conf_opkg" ]
     then
-        Update_File "$conf_opkg" "$share/examples/$opkg" "backup"
+        Update_File "$conf_opkg" "$share/examples/$opkg" "BACKUP"
         delfr "$conf_opkg"
     elif [ ! -e "$share/examples/$opkg" ]
     then
@@ -1582,10 +1603,10 @@ Setup_SysLogNG()
     sed_SysLogNg_Init
     sed_srvcEvent
     sed_unMount
-    if [ "$( md5_file "$sng_share/examples/${sng}.conf-scribe" )" != "$( md5_file "$sng_conf" )" ]
+    if ! Same_MD5_Hash "$sng_share/examples/${sng}.conf-scribe" "$sng_conf"
     then
         printf " ${white}%34s" "updating $(strip_path "$sng_conf") ..."
-        Update_File "$sng_share/examples/${sng}.conf-scribe" "$sng_conf" "backup"
+        Update_File "$sng_share/examples/${sng}.conf-scribe" "$sng_conf" "BACKUP"
         finished
     fi
     SysLogNg_Config_Sync
@@ -1594,7 +1615,7 @@ Setup_SysLogNG()
 Setup_LogRotate()
 {
     # Assumes since Entware is required/installed, post-mount exists and is properly executable #
-    printf "\n$magenta setting up %s ...\n" "$lr"
+    printf "\n ${magenta}setting up %s ...\n" "$lr"
     LogRotate_CronJob_PostMount_Check
     LogRotate_CronJob_Check
 }
@@ -1622,7 +1643,7 @@ Do_Install()
 ##----------------------------------------##
 Setup_Scribe()
 {
-    printf "\n$white setting up %s ...\n" "$script_name"
+    printf "\n ${white}setting up %s ...\n" "$script_name"
     cp -fp "$unzip_dirPath/${script_name}.sh" "$script_loc"
     chmod 0755 "$script_loc"
     [ ! -e "/opt/bin/$script_name" ] && ln -s "$script_loc" /opt/bin
@@ -2017,7 +2038,7 @@ Menu_Filters()
             for upd_file in "$check_dir"/*
             do
                 comp_file="$comp_dir/$( strip_path "$upd_file" )"
-                if [ -e "$comp_file" ] && ! same_same "$upd_file" "$comp_file"
+                if [ -e "$comp_file" ] && ! Same_MD5_Hash "$upd_file" "$comp_file"
                 then
                     processed=false
                     printf "\n$white Update available for$yellow %s$white.\n" "$upd_file"
@@ -2028,11 +2049,11 @@ Menu_Filters()
                         case "$dispo" in
                             a)
                                 Update_File "$comp_file" "$upd_file"
-                                printf "\n$green %s updated!$std\n" "$upd_file"
+                                printf "\n ${green}%s updated!${std}\n" "$upd_file"
                                 processed=true
                                 ;;
                             r)
-                                printf "\n$magenta %s not updated!$std\n" "$upd_file"
+                                printf "\n ${magenta}%s not updated!${std}\n" "$upd_file"
                                 processed=true
                                 ;;
                             v)
@@ -2060,35 +2081,38 @@ Menu_Filters()
 ##----------------------------------------##
 Menu_Update()
 {
+    local doUpdate=false
+
     if [ $# -eq 0 ] || [ -z "$1" ]
     then
         if [ "$new_vers" = "major" ] || [ "$new_vers" = "minor" ]
         then
             if [ "$new_vers" = "major" ]
-            then printf "\n$green    New version"
-            else printf "\n$cyan    Minor patch"
+            then printf "\n    ${green}New version"
+            else printf "\n    ${cyan}Minor patch"
             fi
-            printf "$white available!\n"
-            printf "    Do you wish to upgrade? [y|n]$std  "
+            printf " ${white}available!\n"
+            printf "    Do you wish to upgrade? [y|n]${std}  "
         else
-            printf "\n$white    No new version available. (GitHub version"
+            printf "\n    ${white}No new version available. GitHub version"
             if [ "$new_vers" = "none" ]
-            then printf " equal to "
-            else printf "$red LESS THAN $white"
+            then printf " equal to"
+            else printf " ${red}LESS THAN$white"
             fi
-            printf "local version)\n"
-            printf "    Do you wish to force re-installation of %s script? [y|n]$std  " "$script_name"
+            printf " local version.\n"
+            printf "    Do you wish to force re-installation of %s? [y|n]${std}  " "$script_name"
         fi
+        Yes_Or_No && doUpdate=true || doUpdate=false
     fi
 
-    if { [ $# -gt 0 ] && [ "$1" = "force" ] ; } || Yes_Or_No
+    if { [ $# -gt 0 ] && [ "$1" = "force" ] ; } || "$doUpdate"
     then
         Get_ZIP_File
         Setup_Scribe "NEWER"
         Copy_SysLogNg_RcFunc
         Copy_SysLogNg_Top_Config "$@"
         Copy_LogRotate_Global_Options "$@"
-        printf "\n$white %s updated!$std\n" "$script_name"
+        printf "\n ${white}%s updated!${std}\n" "$script_name"
         rm -f "$syslogNg_WaitnSEM_FPath"
         echo '1' > "$syslogNg_StartSEM_FPath"
         printf '' > "$syslogD_InitRebootLogFPath"
@@ -2096,7 +2120,7 @@ Menu_Update()
         sh "$script_loc" status nologo
         run_scribe=true
     else
-        printf "\n$white        *** %s ${red}not${white} updated! *** ${std}\n\n" "$script_name"
+        printf "\n        ${white}*** %s ${red}NOT${white} updated! *** ${std}\n\n" "$script_name"
     fi
 }
 

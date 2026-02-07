@@ -1,6 +1,6 @@
-### README.1ST --- 22 June 2020
+### README.1ST --- Revised: 2026-Jan-30
 
-Please READ before copying any of these files to /opt/etc/syslog-ng.d/
+Please READ *BEFORE* copying any of these files to /opt/etc/syslog-ng.d/
 
 ****    If you simply copy all of the files in this directory to    ****
 ****    /opt/etc/syslog-ng.d/ the next time you try to restart      ****
@@ -12,18 +12,21 @@ log files.  Note that when copying the files, they must be writable by the
 user only, i.e. chmod 600.  If the group or others can write to them, they
 will not be loaded by syslog-ng.
 
-It is highly recommended to copy the corresponding file of the same name
-in /opt/share/logrotate/examples/ to /opt/etc/logroate.d/ to ensure the
-log files do not grow too large.  If there is not corresponding file in
-/opt/share/logrotate/examples, then either the file is not intended to be
-used permanently (e.g. expandlog); or should generate no or very few log
-entries (e.g. blankmsg, errormsg); or its logs are handled by other
-programs (e.g. skynet).
+It is NOT required to copy the corresponding file of the same name found
+in "/opt/share/logrotate/examples" to "/opt/etc/logrotate.d" directory.
+The logrotate configuration files are optional; they are needed ONLY IF
+you want to override any of the default global directives already preset
+in the "A00global" and "A01global" configuration files.
 
-Notes:      1)  All ".log" files will be in /opt/var/log/.
+If there's not corresponding file in "/opt/share/logrotate/examples" then
+either the file is not intended to be used permanently (e.g. expandlog);
+or should generate no or very few log entries (e.g. blankmsg, errormsg);
+or its logs are handled by some other programs (e.g. skynet).
+
+Notes:      1)  All ".log" files MUST be in the "/opt/var/log" directory.
             2)  Unless otherwise noted, all filters are "final", meaning
-                messages matched by the filter will not be logged in the
-                default messages file.
+                messages matched by the filter will NOT be logged in the
+                default "/opt/var/log/messages" log file.
 
 The files in this directory are:
     A00remote   Sends _ALL_ messages to a remote logging facility before

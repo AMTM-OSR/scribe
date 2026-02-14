@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Feb-07
+# Last Modified: 2026-Feb-14
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -34,8 +34,8 @@
 #################################################################
 
 readonly script_name="scribe"
-readonly scribe_ver="v3.2.9"
-readonly scriptVer_TAG="26020700"
+readonly scribe_ver="v3.2.10"
+readonly scriptVer_TAG="26021400"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -1397,13 +1397,13 @@ _Generate_ListOf_Filtered_LogFiles_()
     then
         while read -r theLINE && [ -n "$theLINE" ]
         do
-            logFilePath="$(echo "$theLINE" | sed -e 's/^[ ]*file("//;s/".*$//')"
+            logFilePath="$(echo "$theLINE" | sed -e 's/.*[{ ]\?file("//;s/".*$//')"
             if grep -qE "^${logFilePath}$" "$tmpFilterList"
             then continue  #Avoid duplicates#
             fi
             echo "$logFilePath" >> "$tmpFilterList"
         done <<EOT
-$(grep -A 1 "^destination" "$tmpSysLogList" | grep -E '[[:blank:]]*file\("/' | grep -v '.*/log/messages')
+$(grep -A1 "^destination" "$tmpSysLogList" | grep -E '.*[{ ]file\("/opt/var/' | grep -v '.*/log/messages')
 EOT
     fi
 

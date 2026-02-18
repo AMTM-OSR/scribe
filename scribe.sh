@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Feb-15
+# Last Modified: 2026-Feb-18
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -34,10 +34,13 @@
 #################################################################
 
 readonly script_name="scribe"
-readonly scribe_ver="v3.2.10"
-readonly scriptVer_TAG="26021523"
+readonly scribe_ver="v3.2.11"
+readonly scriptVer_TAG="26021800"
 scribe_branch="develop"
 script_branch="$scribe_branch"
+
+# To support automatic script updates from AMTM #
+doScriptUpdateFromAMTM=true
 
 # Ensure firmware binaries are used, not Entware #
 export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
@@ -68,6 +71,14 @@ do
         service_event | LogRotate)
             banner=false
             action="$1"
+            break
+            ;;
+        amtmupdate)
+            action="$1"
+            if [ $# -gt 1 ] && [ "$2" = "check" ]
+            then banner=false
+            fi
+            shift
             break
             ;;
         *)
@@ -236,6 +247,10 @@ readonly uiscribeRepo="$raw_git/$uiscribeAuthor/$uiscribeName/$uiscribeBranch/${
 readonly uiscribePath="$script_d/$uiscribeName"
 readonly uiscribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})"
 readonly menuSepStr="${white} =*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=${CLRct}\n\n"
+
+isInteractive=false
+[ -t 0 ] && ! tty | grep -qwi "NOT" && isInteractive=true
+if ! "$isInteractive" ; then banner=false ; fi
 
 # Check if Scribe is already installed by looking for link in /opt/bin #
 [ -e "/opt/bin/$script_name" ] && scribeInstalled=true || scribeInstalled=false
@@ -1383,10 +1398,11 @@ _HasRouterMoreThan512MBtotalRAM_()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2026-Feb-15] ##
+## Modified by Martinski W. [2026-Feb-18] ##
 ##----------------------------------------##
 _Generate_ListOf_Filtered_LogFiles_()
 {
+    local logDirPath  logFilePath  setDirPerms=true
     local tmpSysLogList="${HOMEdir}/${script_name}_tempSysLogList_$$.txt"
     local tmpFilterList="${HOMEdir}/${script_name}_tempFltLogList_$$.txt"
 
@@ -1402,8 +1418,15 @@ _Generate_ListOf_Filtered_LogFiles_()
             then continue  #Avoid duplicates#
             fi
             echo "$logFilePath" >> "$tmpFilterList"
+            if "$setDirPerms"
+            then
+                logDirPath="$(dirname "$logFilePath")"
+                if echo "$logDirPath" | grep -qE "^${optVarLogDir}/.+"
+                then chmod 0755 "$logDirPath" 2>/dev/null
+                fi
+            fi
         done <<EOT
-$(grep -A1 "^destination" "$tmpSysLogList" | grep -E "[{[:blank:]]file\([\"']/opt/var/" | grep -v '.*/log/messages')
+$(grep -A1 "^destination" "$tmpSysLogList" | grep -E "[{[:blank:]]file\([\"']/opt/var/log/" | grep -v '.*/messages')
 EOT
     fi
 
@@ -1790,6 +1813,13 @@ Menu_Install()
         Do_Install "$sng" "FORCE"
     fi
     echo
+
+    if [ ! -d "$optVarLogDir" ]
+    then
+        mkdir -p "$optVarLogDir"
+    fi
+    chmod 0755 "$optVarLogDir"
+
     rm -f "$syslogNg_WaitnSEM_FPath"
     echo '1' > "$syslogNg_StartSEM_FPath"
     printf '' > "$syslogD_InitRebootLogFPath"
@@ -2077,7 +2107,7 @@ Menu_Filters()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2026-Jan-30] ##
+## Modified by Martinski W. [2026-Feb-18] ##
 ##----------------------------------------##
 Menu_Update()
 {
@@ -2116,11 +2146,16 @@ Menu_Update()
         rm -f "$syslogNg_WaitnSEM_FPath"
         echo '1' > "$syslogNg_StartSEM_FPath"
         printf '' > "$syslogD_InitRebootLogFPath"
-        sh "$script_loc" filters gotzip nologo
+        if "$isInteractive"
+        then
+            sh "$script_loc" filters gotzip nologo
+        fi
         sh "$script_loc" status nologo
         run_scribe=true
+        return 0
     else
         printf "\n        ${white}*** %s ${red}NOT${white} updated! *** ${std}\n\n" "$script_name"
+        return 1
     fi
 }
 
@@ -2137,6 +2172,28 @@ Update_Version()
    else
        not_recog=true
    fi
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2026-Feb-18] ##
+##-------------------------------------##
+ScriptUpdateFromAMTM()
+{
+    if ! "$doScriptUpdateFromAMTM"
+    then
+        printf "Automatic script updates via AMTM are currently disabled.\n\n"
+        return 1
+    fi
+    if ! SyslogNg_Running
+    then
+        printf "$sng is currently not running. Script updates are NOT allowed during this state.\n\n"
+        return 1
+    fi
+    if [ $# -gt 0 ] && [ "$1" = "check" ]
+    then return 0
+    fi
+    Menu_Update force
+    return "$?"
 }
 
 menu_forgrnd()
@@ -2963,6 +3020,10 @@ case "$action" in
         ;;
     forceupdate)
         Update_Version force
+        ;;
+    amtmupdate)
+        ScriptUpdateFromAMTM "$@"
+        exit "$?"
         ;;
     develop)
         script_branch="develop"

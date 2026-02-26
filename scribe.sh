@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Feb-21
+# Last Modified: 2026-Feb-25
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -35,7 +35,7 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.11"
-readonly scriptVer_TAG="26022123"
+readonly scriptVer_TAG="26022523"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -2040,21 +2040,24 @@ Menu_Uninstall()
     esac
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2026-Feb-25] ##
+##----------------------------------------##
 Menu_Filters()
 {
-    printf "\n$white    Do you want to update$yellow %s$white and$yellow %s$white filter files?\n" "$sng" "$lr"
-    printf "$cyan        1) Adds any new files to$yellow %s$cyan directories\n" "$share_ex"
-    printf "           and updates any example files that have changed.\n"
-    printf "        2) Adds any new files to$yellow %s$cyan directories.\n" "$etc_d"
-    printf "        3) Asks to update existing files in$yellow %s$cyan directories\n" "$etc_d"
-    printf "$magenta           _IF_$cyan a corresponding file exists in$yellow %s$cyan,\n" "$share_ex"
-    printf "$magenta           _AND_$cyan it is different from the file in$yellow %s$cyan.\n" "$etc_d"
-    printf "$white           NOTE:$cyan You will be provided an opportunity to review\n"
-    printf "           the differences between the existing file and the\n"
-    printf "           proposed update.\n\n"
-    printf "$yellow    If you are unsure, you should answer 'y' here; any changes to\n"
-    printf "    the running configuration will require confirmation.\n\n"
-    printf "$white        Update filter files? [y|n] $std"
+    printf "\n ${white}Do you want to update ${yellow}%s${white} and ${yellow}%s${white} filter files?\n" "$sng" "$lr"
+    printf "\n   ${cyan}1) Adds any new files to ${yellow}%s${cyan} directories\n" "$share_ex"
+    printf "      and updates any example files that have changed.\n"
+    printf "   2) Adds any new files to ${yellow}%s${cyan} directories.\n" "$etc_d"
+    printf "   3) Asks to update existing files in ${yellow}%s${cyan} directories\n" "$etc_d"
+    printf "      ${magenta}_IF_${cyan} a corresponding file exists in ${yellow}%s${cyan},\n" "$share_ex"
+    printf "      ${magenta}_AND_${cyan} it is different from the file in ${yellow}%s${cyan}.\n" "$etc_d"
+    printf "      ${white}NOTE:${cyan} You will be provided an opportunity to review\n"
+    printf "      the differences between the existing file and the\n"
+    printf "      proposed update.\n\n"
+    printf " ${yellow}If you are unsure, you should answer ${white}'${green}y${white}'${yellow} here; any changes\n"
+    printf " to the running configuration will require confirmation.\n\n"
+    printf " ${white}Update filter files? [${green}y${white}|${green}n${white}]${std} "
     if Yes_Or_No
     then
         Get_ZIP_File
@@ -2070,19 +2073,19 @@ Menu_Filters()
                 if [ -e "$comp_file" ] && ! Same_MD5_Hash "$upd_file" "$comp_file"
                 then
                     processed=false
-                    printf "\n$white Update available for$yellow %s$white.\n" "$upd_file"
+                    printf "\n ${white}Update available for ${yellow}%s${white}.\n" "$upd_file"
                     while ! $processed
                     do
-                        printf "    (a)ccept, (r)eject, or (v)iew diff for this file? "
+                        printf "   (${green}a${white})ccept, (${green}r${white})eject, or (${green}v${white})iew diff for this file? "
                         read -r dispo
                         case "$dispo" in
                             a)
                                 Update_File "$comp_file" "$upd_file"
-                                printf "\n ${green}%s updated!${std}\n" "$upd_file"
+                                printf "\n ${green}%s was updated!${std}\n" "$upd_file"
                                 processed=true
                                 ;;
                             r)
-                                printf "\n ${magenta}%s not updated!${std}\n" "$upd_file"
+                                printf "\n ${magenta}%s NOT updated!${std}\n" "$upd_file"
                                 processed=true
                                 ;;
                             v)
@@ -2098,10 +2101,10 @@ Menu_Filters()
                 fi
             done
         done
-        printf "\n ${white}%s and %s example files updated!${std}\n" "$sng" "$lr"
+        printf "\n ${white}%s and %s example files were updated!${std}\n\n" "$sng" "$lr"
         Reload_SysLogNg_Config
     else
-        printf "\n ${white}%s and %s example files ${red}not${white} updated!${std}\n" "$sng" "$lr"
+        printf "\n ${white}%s and %s example files ${red}NOT${white} updated!${std}\n\n" "$sng" "$lr"
     fi
 }
 

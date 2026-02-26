@@ -1,15 +1,17 @@
-# log ethernet change to /opt/var/log/ethernet.log only
+# log ethernet change to /opt/var/log/ethernet.log only #
+# Last Modified: 2026-Feb-25 #
 
 destination d_ethernet {
     file("/opt/var/log/ethernet.log");
 };
 
 filter f_kernel {
-    program("kernel");
+    program("kernel") and
+    not match('BLOCKED -' value("MESSAGE"));
 };
 
 filter f_ethernet {
-    message("eth1") or
+   (message("eth1") or
     message("eth2") or
     message("eth3") or
     message("eth4") or
@@ -18,7 +20,8 @@ filter f_ethernet {
     message("eth7") or
     message("eth8") or
     message("br0:") or
-    message("br1:");
+    message("br1:")) and
+    not match('IN=eth.* OUT=.* MAC=.*' value("MESSAGE"));
 };
 
 log {

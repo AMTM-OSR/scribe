@@ -1,5 +1,5 @@
 # log ethernet change to /opt/var/log/ethernet.log only #
-# Last Modified: 2026-Feb-25 #
+# Last Modified: 2026-Feb-27 #
 
 destination d_ethernet {
     file("/opt/var/log/ethernet.log");
@@ -11,17 +11,8 @@ filter f_kernel {
 };
 
 filter f_ethernet {
-   (message("eth1") or
-    message("eth2") or
-    message("eth3") or
-    message("eth4") or
-    message("eth5") or
-    message("eth6") or
-    message("eth7") or
-    message("eth8") or
-    message("br0:") or
-    message("br1:")) and
-    not match('IN=eth.* OUT=.* MAC=.*' value("MESSAGE"));
+   (message('eth[0-9]') or message('br[0-9]:')) and
+    not match('IN=eth. OUT=' value("MESSAGE"));
 };
 
 log {

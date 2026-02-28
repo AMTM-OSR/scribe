@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Feb-25
+# Last Modified: 2026-Feb-27
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -35,7 +35,7 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.11"
-readonly scriptVer_TAG="26022523"
+readonly scriptVer_TAG="26022723"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -674,6 +674,34 @@ Copy_SysLogNg_RcFunc()
 }
 
 ##-------------------------------------##
+## Added by Martinski W. [2026-Feb-27] ##
+##-------------------------------------##
+_Find_WildcardFile_TopConfigLines_()
+{
+    if [ $# -eq 0 ] || [ -z "$1" ] || [ ! -s "$1" ]
+    then return 1
+    fi
+    local retCode=0  lineNum  lineStr1  lineStr2  lineStr3  lineStr4
+
+    lineStr1='wildcard_file(base_dir("/opt/var/log")'
+    lineStr2='filename_pattern("syslogd.ScribeInitReboot.LOG")'
+    lineStr3='recursive(no) max-files(1) follow_freq(1)'
+    lineStr4='log_iw_size(1200) log_fetch_limit(1000) flags(syslog-protocol))'
+    
+    lineNum=1
+    while read -r theLINE && [ -n "$theLINE" ]
+    do
+        if ! echo "$theLINE" | grep -qF "$(eval echo '$'"lineStr$lineNum")"
+        then retCode=1 ; break
+        fi
+        lineNum="$((lineNum + 1))"
+    done <<EOT
+$(grep -F -A3 "$lineStr1" "$1")
+EOT
+    return "$retCode"
+}
+
+##-------------------------------------##
 ## Added by Martinski W. [2026-Jan-15] ##
 ##-------------------------------------##
 Copy_SysLogNg_Top_Config()
@@ -700,7 +728,8 @@ Copy_SysLogNg_Top_Config()
             grep -Ev "^(\-|\+)[[:blank:]]+log_fifo_size\(" > "$diffFile"
             if [ -s "$diffFile" ] && \
                grep -qE "^(\-|\+)" "$diffFile" && \
-               [ "$(wc -l < "$diffFile")" -gt 0 ]
+               [ "$(wc -l < "$diffFile")" -gt 0 ] && \
+               ! _Find_WildcardFile_TopConfigLines_ "$destFile"
             then
                 printf " ${yellow}updating $destFile ..."
                 Update_File "$srceFile" "$destFile" "BACKUP"
@@ -2171,8 +2200,10 @@ Update_Version()
        GetScribeVersion
        ShowScribeVersion
        Menu_Update "$@"
+       return "$?"
    else
        not_recog=true
+       return 1
    fi
 }
 
@@ -2194,7 +2225,7 @@ ScriptUpdateFromAMTM()
     if [ $# -gt 0 ] && [ "$1" = "check" ]
     then return 0
     fi
-    Menu_Update force
+    Update_Version force
     return "$?"
 }
 

@@ -1,0 +1,19 @@
+#######################################################
+# Capture all incoming log messages that are tagged
+# with the 'debug' log priority level.
+# /opt/var/log/debugMessages.log
+# Last Modified: 2026-Mar-01
+#######################################################
+
+destination d_DebugLogMsg { 
+    file('/opt/var/log/debugMessages.log');
+};
+
+log {
+    source(src);
+    filter { level(debug); };
+    destination(d_DebugLogMsg);
+    flags(final);
+};
+
+#eof#

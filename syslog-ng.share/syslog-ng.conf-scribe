@@ -1,6 +1,6 @@
 #############################################################################
 # syslog-ng.conf customized for Scribe on Asuswrt-Merlin firmware
-# Last Modified: 2026-Feb-01
+# Last Modified: 2026-Mar-01
 #
 # Compare to /opt/share/syslog-ng/examples/syslog-ng.conf-opkg for 
 # differences from the Entware distribution
@@ -54,6 +54,7 @@ log {
     source(src);
 # uncomment this and "source s_net" function above to get udp log messages from local network #
 #OFF# source(s_net);
+    filter { level(info..emerg); };
     destination(messages);
 # uncomment this and "destination log_server" function above to send udp log messages to local network #
 #OFF# destination(log_server);

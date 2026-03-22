@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Feb-15
+# Last Modified: 2026-Mar-02
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -34,10 +34,13 @@
 #################################################################
 
 readonly script_name="scribe"
-readonly scribe_ver="v3.2.10"
-readonly scriptVer_TAG="26021523"
-scribe_branch="master"
+readonly scribe_ver="v3.2.11"
+readonly scriptVer_TAG="26030223"
+scribe_branch="develop"
 script_branch="$scribe_branch"
+
+# To support automatic script updates from AMTM #
+doScriptUpdateFromAMTM=true
 
 # Ensure firmware binaries are used, not Entware #
 export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
@@ -68,6 +71,14 @@ do
         service_event | LogRotate)
             banner=false
             action="$1"
+            break
+            ;;
+        amtmupdate)
+            action="$1"
+            if [ $# -gt 1 ] && [ "$2" = "check" ]
+            then banner=false
+            fi
+            shift
             break
             ;;
         *)
@@ -179,17 +190,18 @@ readonly syslogNgStr="syslog-ng"
 readonly logRotateStr="logrotate"
 readonly syslogNgCmd="/opt/sbin/$syslogNgStr"
 readonly logRotateCmd="/opt/sbin/$logRotateStr"
-readonly logRotateDir="/opt/etc/${logRotateStr}.d"
+readonly logRotateConfDir="/opt/etc/${logRotateStr}.d"
 readonly logRotateShareDir="/opt/share/$logRotateStr"
 readonly logRotateExamplesDir="${logRotateShareDir}/examples"
 readonly logRotateTopConfig="/opt/etc/${logRotateStr}.conf"
 readonly logRotateGlobalName="A01global"
-readonly logRotateGlobalConf="${logRotateDir}/$logRotateGlobalName"
+readonly logRotateGlobalConf="${logRotateConfDir}/$logRotateGlobalName"
 readonly LR_FLock_FD=513
 readonly LR_FLock_FName="/tmp/scribeLogRotate.flock"
 readonly logFilesRegExp="${optVarLogDir}/.*([.]log)?"
 readonly filteredLogList="${config_d}/.filteredlogs"
 readonly noConfigLogList="${config_d}/.noconfiglogs"
+readonly syslogNg_ConfDir="/opt/etc/${syslogNgStr}.d"
 readonly syslogNg_ShareDir="/opt/share/$syslogNgStr"
 readonly syslogNg_ExamplesDir="${syslogNg_ShareDir}/examples"
 readonly syslogNg_ConfName=${syslogNgStr}.conf
@@ -200,6 +212,13 @@ readonly syslogD_InitRebootLogFPath="${optVarLogDir}/syslogd.ScribeInitReboot.LO
 readonly sysLogLinesMAX=20480
 readonly sysLogMsgeSizeMAX=2048
 sysLogFiFoSizeMIN=1600
+
+readonly debugMsgDiscardFilterName="A0DebugMsgsDiscard"
+readonly debugMsgDiscardFilterConf="${syslogNg_ConfDir}/$debugMsgDiscardFilterName"
+readonly debugMsgDiscardFilterSrce="${syslogNg_ExamplesDir}/$debugMsgDiscardFilterName"
+readonly debugMsgCaptureFilterName="A0DebugMsgsCapture"
+readonly debugMsgCaptureFilterConf="${syslogNg_ConfDir}/$debugMsgCaptureFilterName"
+readonly debugMsgCaptureFilterSrce="${syslogNg_ExamplesDir}/$debugMsgCaptureFilterName"
 
 # color constants #
 readonly red="\033[1;31m"
@@ -236,6 +255,10 @@ readonly uiscribeRepo="$raw_git/$uiscribeAuthor/$uiscribeName/$uiscribeBranch/${
 readonly uiscribePath="$script_d/$uiscribeName"
 readonly uiscribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})"
 readonly menuSepStr="${white} =*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=${CLRct}\n\n"
+
+isInteractive=false
+[ -t 0 ] && ! tty | grep -qwi "NOT" && isInteractive=true
+if ! "$isInteractive" ; then banner=false ; fi
 
 # Check if Scribe is already installed by looking for link in /opt/bin #
 [ -e "/opt/bin/$script_name" ] && scribeInstalled=true || scribeInstalled=false
@@ -518,6 +541,10 @@ Read_Config()
     then
         _Config_Option_Update_ LR_CRONJOB_HOUR 24
     fi
+    if ! _Config_Option_Check_ DEBUG_LOG_LEVEL_MSG
+    then
+        _Config_Option_Update_ DEBUG_LOG_LEVEL_MSG Allowed
+    fi
     if ! _Config_Option_Check_ FILTER_INIT_REBOOT_LOG
     then
         _Config_Option_Update_ FILTER_INIT_REBOOT_LOG true
@@ -633,12 +660,19 @@ Get_ZIP_File()
     fi
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2026-Mar-02] ##
+##----------------------------------------##
 Restart_uiScribe()
 {
+    local from=""
     if "$uiScribeInstalled"
     then
         printf "\n$white Restarting ${uiscribeName}...\n"
-        $uiscribePath startup
+        if [ $# -gt 0 ] && [ "$1" = "true" ]
+        then from="Scribe"
+        fi
+        $uiscribePath startup $from
     fi
 }
 
@@ -647,7 +681,7 @@ Reload_SysLogNg_Config()
     printf "$white reloading %s ... $cyan" "$( strip_path $sng_conf )"
     $sngctl_loc reload
     printf "\n$std"
-    Restart_uiScribe
+    Restart_uiScribe "$@"
 }
 
 Copy_SysLogNg_RcFunc()
@@ -656,6 +690,40 @@ Copy_SysLogNg_RcFunc()
     cp -fp "${unzip_dirPath}/init.d/$rcfunc_sng" "$init_d/"
     chmod 644 "$rcfunc_loc"
     finished
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2026-Feb-27] ##
+##-------------------------------------##
+_TopLevelConfigLinesCheck_()
+{
+    if [ $# -eq 0 ] || [ -z "$1" ] || [ ! -s "$1" ]
+    then return 1
+    fi
+    local retCode=0  lineNum=1
+    local lineStr1  lineStr2  lineStr3  lineStr4  lineStr5
+
+    lineStr1='wildcard_file(base_dir("/opt/var/log")'
+    lineStr2='filename_pattern("syslogd.ScribeInitReboot.LOG")'
+    lineStr3='recursive(no) max-files(1) follow_freq(1)'
+    lineStr4='log_iw_size(1200) log_fetch_limit(1000) flags(syslog-protocol))'
+    lineStr5='filter \{ level\((info|debug)..emerg\); \}'
+
+    while read -r theLINE && [ -n "$theLINE" ]
+    do
+        if ! echo "$theLINE" | grep -qF "$(eval echo '$'"lineStr$lineNum")"
+        then retCode=1 ; break
+        fi
+        lineNum="$((lineNum + 1))"
+    done <<EOT
+$(grep -F -A3 "$lineStr1" "$1")
+EOT
+
+    if ! grep -qE "$lineStr5" "$1"
+    then retCode=1
+    fi
+
+    return "$retCode"
 }
 
 ##-------------------------------------##
@@ -685,7 +753,8 @@ Copy_SysLogNg_Top_Config()
             grep -Ev "^(\-|\+)[[:blank:]]+log_fifo_size\(" > "$diffFile"
             if [ -s "$diffFile" ] && \
                grep -qE "^(\-|\+)" "$diffFile" && \
-               [ "$(wc -l < "$diffFile")" -gt 0 ]
+               [ "$(wc -l < "$diffFile")" -gt 0 ] && \
+               ! _TopLevelConfigLinesCheck_ "$destFile"
             then
                 printf " ${yellow}updating $destFile ..."
                 Update_File "$srceFile" "$destFile" "BACKUP"
@@ -982,7 +1051,7 @@ _Get_LogRotate_CronHour_()
 ##-------------------------------------##
 ## Added by Martinski W. [2025-Nov-29] ##
 ##-------------------------------------##
-menu_LogRotate_CronJob_Time()
+Menu_LogRotate_CronJob_Time()
 {
     local GREEN="\\\e[1;32m"  CLRD="\\\e[0m"
     local validHoursANDstr  validHoursORstr
@@ -1056,6 +1125,116 @@ LogRotate_CronJob_Check()
     else
         present
     fi
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2026-Mar-01] ##
+##-------------------------------------##
+SetDebugLogLevelMsgFilter()
+{
+    if [ $# -eq 0 ] || [ -z "$1" ]
+    then return 1
+    fi
+    if [ "$1" = "Discard" ]
+    then
+        rm -f "$debugMsgCaptureFilterConf"
+        [ ! -s "$debugMsgDiscardFilterSrce" ] && return 1
+        cp -fp "$debugMsgDiscardFilterSrce" "$debugMsgDiscardFilterConf"
+        chmod 600 "$debugMsgDiscardFilterConf"
+        _Config_Option_Update_ DEBUG_LOG_LEVEL_MSG Discard
+        return 0
+    fi
+    if [ "$1" = "Capture" ]
+    then
+        rm -f "$debugMsgDiscardFilterConf"
+        [ ! -s "$debugMsgCaptureFilterSrce" ] && return 1
+        cp -fp "$debugMsgCaptureFilterSrce" "$debugMsgCaptureFilterConf"
+        chmod 600 "$debugMsgCaptureFilterConf"
+        _Config_Option_Update_ DEBUG_LOG_LEVEL_MSG Capture
+        return 0
+    fi
+    if [ "$1" = "Allowed" ]
+    then
+        rm -f "$debugMsgDiscardFilterConf"
+        rm -f "$debugMsgCaptureFilterConf"
+        _Config_Option_Update_ DEBUG_LOG_LEVEL_MSG Allowed
+        return 0
+    fi
+}
+
+##-------------------------------------##
+## Added by Martinski W. [2026-Mar-01] ##
+##-------------------------------------##
+DebugLogLevelMsgHandling()
+{
+    local userInput  exitLoop=false
+    local debugLogMsgOpt  debugLogMsgOptStr
+    local debugLogMsgRegEx="(Discard|Capture|Allowed)"
+
+    if [ ! -s "$debugMsgDiscardFilterSrce" ] || \
+       [ ! -s "$debugMsgCaptureFilterSrce" ]
+    then
+        printf "\n ${yellow}Please update the filter files (Main menu '${green}ft${yellow}' option)\n"
+        printf " before configuring the filter for '${green}debug${yellow}' log messages.${CLRct}\n\n"
+        PressEnterTo "continue..."
+        return 1
+    fi
+
+    debugLogMsgOpt="$(_Config_Option_Get_ DEBUG_LOG_LEVEL_MSG)"
+    if [ -z "$debugLogMsgOpt" ] || \
+       ! echo "$debugLogMsgOpt" | grep -qE "^${debugLogMsgRegEx}$"
+    then
+        _Config_Option_Update_ DEBUG_LOG_LEVEL_MSG Allowed
+    fi
+
+    while true
+    do
+        ScriptLogo
+        printf "$menuSepStr"
+        debugLogMsgOpt="$(_Config_Option_Get_ DEBUG_LOG_LEVEL_MSG)"
+        case "$debugLogMsgOpt" in
+            Discard) debugLogMsgOptStr="${green}Discard${CLRct} debug messages" ;;
+            Capture) debugLogMsgOptStr="${green}Capture${CLRct} debug messages" ;;
+            Allowed) debugLogMsgOptStr="${green}Allow${CLRct} debug messages" ;;
+        esac
+        printf "    ${BOLD}Current setting: ${debugLogMsgOptStr}\n\n"
+        printf " ${BOLD}Specify how to handle incoming log messages that\n"
+        printf " have been tagged with the '${green}debug${CLRct}' severity level.\n\n"
+        printf "   ${green}1${CLRct}. Discard debug messages\n\n"
+        printf "   ${green}2${CLRct}. Capture debug messages in a separate log file\n"
+        printf "      [${green}/opt/var/log/debugMessages.log${CLRct}]\n\n"
+        printf "   ${green}3${CLRct}. Allow debug messages so filters may handle them\n"
+        printf "      [They're excluded from the '${green}messages${CLRct}' log file]\n\n"
+        printf "   ${green}e${CLRct}. Go back\n"
+        printf "\n$menuSepStr"
+        printf " ${magenta}Please select an option:${CLRct} "
+        read -r userInput
+
+        if [ -z "$userInput" ] || echo "$userInput" | grep -qE "^[eE]$"
+        then
+            exitLoop=true ; echo
+            break
+        elif ! echo "$userInput" | grep -qE "^[0-9]+$"
+        then
+            printf "\n ${red}Please enter a valid selection [1-3]${CLRct}\n\n"
+            PressEnterTo "continue..."
+        elif ! echo "$userInput" | grep -qE "^[1-3]$"
+        then
+            printf "\n ${red}Please enter a number between 1 and 3${CLRct}\n\n"
+            PressEnterTo "continue..."
+        else
+            case "$userInput" in
+                1) SetDebugLogLevelMsgFilter Discard ;;
+                2) SetDebugLogLevelMsgFilter Capture ;;
+                3) SetDebugLogLevelMsgFilter Allowed ;;
+            esac
+            echo ; break
+        fi
+    done
+
+    "$exitLoop" && return 1
+    Reload_SysLogNg_Config true
+    return 0
 }
 
 Check_Dir_Links()
@@ -1356,18 +1535,17 @@ Show_SysLogNg_LoadedConfig()
 ##-------------------------------------##
 _AcquireFLock_()
 {
-   local opts=""
-   eval exec "$LR_FLock_FD>$LR_FLock_FName"
-   
-   if [ $# -eq 1 ] && [ "$1" = "nonblock" ]
-   then opts="-n"
+   local opts="-n"
+   if [ $# -gt 0 ] && [ "$1" = "waitblock" ]
+   then opts=""
    fi
-   flock -x $opts "$LR_FLock_FD"
+   eval exec "$LR_FLock_FD>$LR_FLock_FName"
+   flock -x $opts "$LR_FLock_FD" 2>/dev/null
    return "$?"
 }
 
 _ReleaseFLock_()
-{ flock -u "$LR_FLock_FD" ; }
+{ flock -u "$LR_FLock_FD" 2>/dev/null ; }
 
 ##-------------------------------------##
 ## Added by Martinski W. [2026-Jan-04] ##
@@ -1383,10 +1561,11 @@ _HasRouterMoreThan512MBtotalRAM_()
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2026-Feb-15] ##
+## Modified by Martinski W. [2026-Feb-18] ##
 ##----------------------------------------##
 _Generate_ListOf_Filtered_LogFiles_()
 {
+    local logDirPath  logFilePath  setDirPerms=true
     local tmpSysLogList="${HOMEdir}/${script_name}_tempSysLogList_$$.txt"
     local tmpFilterList="${HOMEdir}/${script_name}_tempFltLogList_$$.txt"
 
@@ -1402,8 +1581,15 @@ _Generate_ListOf_Filtered_LogFiles_()
             then continue  #Avoid duplicates#
             fi
             echo "$logFilePath" >> "$tmpFilterList"
+            if "$setDirPerms"
+            then
+                logDirPath="$(dirname "$logFilePath")"
+                if echo "$logDirPath" | grep -qE "^${optVarLogDir}/.+"
+                then chmod 0755 "$logDirPath" 2>/dev/null
+                fi
+            fi
         done <<EOT
-$(grep -A1 "^destination" "$tmpSysLogList" | grep -E "[{[:blank:]]file\([\"']/opt/var/" | grep -v '.*/log/messages')
+$(grep -A1 "^destination" "$tmpSysLogList" | grep -E "[{[:blank:]]file\([\"']/opt/var/log/" | grep -v '.*/messages')
 EOT
     fi
 
@@ -1419,7 +1605,7 @@ EOT
 ##-------------------------------------##
 _Generate_ListOf_LogFiles_Without_Configs_()
 {
-    local theLogConfigExp="${logRotateDir}/*"
+    local theLogConfigExp="${logRotateConfDir}/*"
     local configFilePath  configFileOK  theLogFile
 
     printf '' > "$noConfigLogList"
@@ -1790,6 +1976,13 @@ Menu_Install()
         Do_Install "$sng" "FORCE"
     fi
     echo
+
+    if [ ! -d "$optVarLogDir" ]
+    then
+        mkdir -p "$optVarLogDir"
+    fi
+    chmod 0755 "$optVarLogDir"
+
     rm -f "$syslogNg_WaitnSEM_FPath"
     echo '1' > "$syslogNg_StartSEM_FPath"
     printf '' > "$syslogD_InitRebootLogFPath"
@@ -2011,21 +2204,24 @@ Menu_Uninstall()
     esac
 }
 
+##----------------------------------------##
+## Modified by Martinski W. [2026-Feb-25] ##
+##----------------------------------------##
 Menu_Filters()
 {
-    printf "\n$white    Do you want to update$yellow %s$white and$yellow %s$white filter files?\n" "$sng" "$lr"
-    printf "$cyan        1) Adds any new files to$yellow %s$cyan directories\n" "$share_ex"
-    printf "           and updates any example files that have changed.\n"
-    printf "        2) Adds any new files to$yellow %s$cyan directories.\n" "$etc_d"
-    printf "        3) Asks to update existing files in$yellow %s$cyan directories\n" "$etc_d"
-    printf "$magenta           _IF_$cyan a corresponding file exists in$yellow %s$cyan,\n" "$share_ex"
-    printf "$magenta           _AND_$cyan it is different from the file in$yellow %s$cyan.\n" "$etc_d"
-    printf "$white           NOTE:$cyan You will be provided an opportunity to review\n"
-    printf "           the differences between the existing file and the\n"
-    printf "           proposed update.\n\n"
-    printf "$yellow    If you are unsure, you should answer 'y' here; any changes to\n"
-    printf "    the running configuration will require confirmation.\n\n"
-    printf "$white        Update filter files? [y|n] $std"
+    printf "\n ${white}Do you want to update ${yellow}%s${white} and ${yellow}%s${white} filter files?\n" "$sng" "$lr"
+    printf "\n   ${cyan}1) Adds any new files to ${yellow}%s${cyan} directories\n" "$share_ex"
+    printf "      and updates any example files that have changed.\n"
+    printf "   2) Adds any new files to ${yellow}%s${cyan} directories.\n" "$etc_d"
+    printf "   3) Asks to update existing files in ${yellow}%s${cyan} directories\n" "$etc_d"
+    printf "      ${magenta}_IF_${cyan} a corresponding file exists in ${yellow}%s${cyan},\n" "$share_ex"
+    printf "      ${magenta}_AND_${cyan} it is different from the file in ${yellow}%s${cyan}.\n" "$etc_d"
+    printf "      ${white}NOTE:${cyan} You will be provided an opportunity to review\n"
+    printf "      the differences between the existing file and the\n"
+    printf "      proposed update.\n\n"
+    printf " ${yellow}If you are unsure, you should answer ${white}'${green}y${white}'${yellow} here; any changes\n"
+    printf " to the running configuration will require confirmation.\n\n"
+    printf " ${white}Update filter files? [${green}y${white}|${green}n${white}]${std} "
     if Yes_Or_No
     then
         Get_ZIP_File
@@ -2041,19 +2237,19 @@ Menu_Filters()
                 if [ -e "$comp_file" ] && ! Same_MD5_Hash "$upd_file" "$comp_file"
                 then
                     processed=false
-                    printf "\n$white Update available for$yellow %s$white.\n" "$upd_file"
+                    printf "\n ${white}Update available for ${yellow}%s${white}.\n" "$upd_file"
                     while ! $processed
                     do
-                        printf "    (a)ccept, (r)eject, or (v)iew diff for this file? "
+                        printf "   (${green}a${white})ccept, (${green}r${white})eject, or (${green}v${white})iew diff for this file? "
                         read -r dispo
                         case "$dispo" in
                             a)
                                 Update_File "$comp_file" "$upd_file"
-                                printf "\n ${green}%s updated!${std}\n" "$upd_file"
+                                printf "\n ${green}%s was updated!${std}\n" "$upd_file"
                                 processed=true
                                 ;;
                             r)
-                                printf "\n ${magenta}%s not updated!${std}\n" "$upd_file"
+                                printf "\n ${magenta}%s NOT updated!${std}\n" "$upd_file"
                                 processed=true
                                 ;;
                             v)
@@ -2069,15 +2265,15 @@ Menu_Filters()
                 fi
             done
         done
-        printf "\n ${white}%s and %s example files updated!${std}\n" "$sng" "$lr"
+        printf "\n ${white}%s and %s example files were updated!${std}\n\n" "$sng" "$lr"
         Reload_SysLogNg_Config
     else
-        printf "\n ${white}%s and %s example files ${red}not${white} updated!${std}\n" "$sng" "$lr"
+        printf "\n ${white}%s and %s example files ${red}NOT${white} updated!${std}\n\n" "$sng" "$lr"
     fi
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2026-Jan-30] ##
+## Modified by Martinski W. [2026-Feb-18] ##
 ##----------------------------------------##
 Menu_Update()
 {
@@ -2116,11 +2312,16 @@ Menu_Update()
         rm -f "$syslogNg_WaitnSEM_FPath"
         echo '1' > "$syslogNg_StartSEM_FPath"
         printf '' > "$syslogD_InitRebootLogFPath"
-        sh "$script_loc" filters gotzip nologo
+        if "$isInteractive"
+        then
+            sh "$script_loc" filters gotzip nologo
+        fi
         sh "$script_loc" status nologo
         run_scribe=true
+        return 0
     else
         printf "\n        ${white}*** %s ${red}NOT${white} updated! *** ${std}\n\n" "$script_name"
+        return 1
     fi
 }
 
@@ -2134,12 +2335,36 @@ Update_Version()
        GetScribeVersion
        ShowScribeVersion
        Menu_Update "$@"
+       return "$?"
    else
        not_recog=true
+       return 1
    fi
 }
 
-menu_forgrnd()
+##-------------------------------------##
+## Added by Martinski W. [2026-Feb-18] ##
+##-------------------------------------##
+ScriptUpdateFromAMTM()
+{
+    if ! "$doScriptUpdateFromAMTM"
+    then
+        printf "Automatic script updates via AMTM are currently disabled.\n\n"
+        return 1
+    fi
+    if ! SyslogNg_Running
+    then
+        printf "$sng is currently not running. Script updates are NOT allowed during this state.\n\n"
+        return 1
+    fi
+    if [ $# -gt 0 ] && [ "$1" = "check" ]
+    then return 0
+    fi
+    Update_Version force
+    return "$?"
+}
+
+SyslogNg_DebugMode()
 {
     local doStart=false
     if SyslogNg_Running
@@ -2238,7 +2463,7 @@ Gather_Debug()
     fi
 
     printf "\n%s\n### logrotate debug output:\n" "$debug_sep" >> "$script_debug"
-    if _AcquireFLock_
+    if _AcquireFLock_ nonblock
     then
         _DoRotateLogFiles_ DEBUG
         _ReleaseFLock_
@@ -2616,29 +2841,40 @@ EOF
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Jan-04] ##
+## Modified by Martinski W. [2026-Mar-02] ##
 ##----------------------------------------##
 Utils_Menu()
 {
-    printf "$magenta        %s Utilities ${CLRct}\n\n" "$script_name"
-    printf "    ${GRNct}bu${CLRct}. Backup configuration files\n"
-    printf "    ${GRNct}rt${CLRct}. Restore configuration files\n\n"
-    printf "     ${GRNct}d${CLRct}. Generate debug file\n"
-    printf "    ${GRNct}rd${CLRct}. Re-detect syslog.log location\n"
-    printf "    ${GRNct}ck${CLRct}. Check on-disk %s config\n" "$sng"
+    local debugLogMsgOpt  debugLogMsgOptStr="UNKNOWN"
+
+    debugLogMsgOpt="$(_Config_Option_Get_ DEBUG_LOG_LEVEL_MSG)"
+    case "$debugLogMsgOpt" in
+        Discard) debugLogMsgOptStr="Discarded" ;;
+        Capture) debugLogMsgOptStr="Captured" ;;
+        Allowed) debugLogMsgOptStr="Allowed" ;;
+    esac
+
+    printf "       ${magenta}%s Utilities${CLRct}\n\n" "$script_name"
+    printf "   ${GRNct}bu${CLRct}. Backup configuration files\n"
+    printf "   ${GRNct}rt${CLRct}. Restore configuration files\n\n"
+    printf "    ${GRNct}d${CLRct}. Generate %s debug file\n" "$script_name"
+    printf "   ${GRNct}rd${CLRct}. Re-detect syslog.log location\n"
     if SyslogNg_Running
     then
-        printf "    ${GRNct}lc${CLRct}. Show loaded %s config\n" "$sng"
+        printf "   ${GRNct}lc${CLRct}. Show loaded %s configuration\n" "$sng"
     fi
-    printf "    ${GRNct}sd${CLRct}. Run %s debugging mode\n" "$sng"
-    printf "    ${GRNct}ld${CLRct}. Show %s debug info\n\n" "$lr"
-    printf "    ${GRNct}ui${CLRct}. "
+    printf "   ${GRNct}ck${CLRct}. Check on-disk %s configuration\n" "$sng"
+    printf "   ${GRNct}sd${CLRct}. Run %s in debugging mode\n" "$sng"
+    printf "   ${GRNct}ld${CLRct}. Show %s debugging information\n" "$lr"
+    printf "   ${GRNct}dm${CLRct}. Messages with 'debug' severity level\n"
+    printf "       [Currently: ${GRNct}${debugLogMsgOptStr}${CLRct}]\n\n"
+    printf "   ${GRNct}ui${CLRct}. "
     if "$uiScribeInstalled"
     then printf "Run"
     else printf "Install"
     fi
     printf " %s\n" "$uiscribeName"
-    printf "     ${GRNct}e${CLRct}. Exit to Main Menu\n"
+    printf "    ${GRNct}e${CLRct}. Exit to Main Menu\n"
 }
 
 ##----------------------------------------##
@@ -2657,7 +2893,7 @@ Main_Menu()
         else insPrefix="Rei"
         fi
     fi
-    andLRcron="& $lr cron"
+    andLRcron="& $lr cron job"
 
     if "$scribeInstalled"
     then
@@ -2665,39 +2901,39 @@ Main_Menu()
         then
             _ShowSysLogNg_WaitStart_Msge_
         fi
-        printf "     ${GRNct}s${CLRct}. Show %s status\n" "$script_name"
+        printf "    ${GRNct}s${CLRct}. Show %s status\n" "$script_name"
         if SyslogNg_Running
         then
-            printf "    ${GRNct}rl${CLRct}. Reload %s.conf\n" "$sng"
-            printf "    ${GRNct}lr${CLRct}. Run logrotate now\n"
+            printf "   ${GRNct}lr${CLRct}. Run logrotate now\n"
         fi
         if SyslogNg_Running || [ ! -f "$syslogNg_WaitnSEM_FPath" ]
         then
-            printf "    ${GRNct}rs${CLRct}. %s %s " "${resPrefix}tart" "$sng"
+            printf "   ${GRNct}rs${CLRct}. %s %s " "${resPrefix}tart" "$sng"
             SyslogNg_Running && echo || printf "${andLRcron}\n"
         fi
         if SyslogNg_Running
         then
-            printf "    ${GRNct}st${CLRct}. Stop %s ${andLRcron}\n" "$sng"
-            printf "    ${GRNct}ct${CLRct}. Set $lr cron job run frequency\n\n"
-            printf "     ${GRNct}u${CLRct}. Check for script updates\n"
-            printf "    ${GRNct}uf${CLRct}. Force update %s with latest version\n" "$script_name"
-            printf "    ${GRNct}ft${CLRct}. Update filters\n"
+            printf "   ${GRNct}rl${CLRct}. Reload %s configuration\n" "$sng"
+            printf "   ${GRNct}st${CLRct}. Stop %s ${andLRcron}\n" "$sng"
+            printf "   ${GRNct}ct${CLRct}. Set $lr cron job run frequency\n\n"
+            printf "    ${GRNct}u${CLRct}. Check for latest script updates\n"
+            printf "   ${GRNct}uf${CLRct}. Force update %s with latest version\n" "$script_name"
+            printf "   ${GRNct}ft${CLRct}. Update filters\n"
         fi
         if [ -f "$syslogNg_WaitnSEM_FPath" ]
         then
             echo
         else
-            printf "    ${GRNct}su${CLRct}. %s utilities\n\n" "$script_name"
+            printf "   ${GRNct}su${CLRct}. %s utilities\n\n" "$script_name"
         fi
     fi
-    printf "     ${GRNct}e${CLRct}. Exit %s\n" "$script_name"
-    printf "    ${GRNct}is${CLRct}. %s %s\n" "${insPrefix}nstall" "$script_name" 
-    printf "    ${GRNct}zs${CLRct}. Remove %s\n" "$script_name"
+    printf "    ${GRNct}e${CLRct}. Exit %s\n" "$script_name"
+    printf "   ${GRNct}is${CLRct}. %s %s\n" "${insPrefix}nstall" "$script_name" 
+    printf "   ${GRNct}zs${CLRct}. Remove %s\n" "$script_name"
 }
 
 ##----------------------------------------##
-## Modified by Martinski W. [2025-Dec-05] ##
+## Modified by Martinski W. [2026-Mar-01] ##
 ##----------------------------------------##
 Scribe_Menu()
 {
@@ -2717,7 +2953,7 @@ Scribe_Menu()
                 ;;
         esac
         printf "\n$menuSepStr"
-        printf "$magenta Please select an option: $std"
+        printf " ${magenta}Please select an option:${std} "
         read -r choice
 
         if "$scribeInstalled" || \
@@ -2762,7 +2998,7 @@ Scribe_Menu()
                 ct)
                     if SyslogNg_Running
                     then
-                        menu_LogRotate_CronJob_Time
+                        Menu_LogRotate_CronJob_Time
                         [ $? -ne 0 ] && pause=false
                     else
                         not_recog=true
@@ -2783,8 +3019,13 @@ Scribe_Menu()
                     fi
                     ;;
                 su)
-                    menu_type="utils"
-                    pause=false
+                    if [ "$menu_type" = "main" ]
+                    then
+                        menu_type="utils"
+                        pause=false
+                    else
+                        not_recog=true
+                    fi
                     ;;
                 bu)
                     menu_backup
@@ -2814,11 +3055,21 @@ Scribe_Menu()
                     fi
                     ;;
                 sd)
-                    menu_forgrnd
+                    SyslogNg_DebugMode
+                    ;;
+                dm) if SyslogNg_Running && \
+                       [ "$menu_type" = "utils" ]
+                    then
+                        if ! DebugLogLevelMsgHandling
+                        then pause=false
+                        fi
+                    else
+                        not_recog=true
+                    fi
                     ;;
                 ld)
                     delfr "$lr_temp"
-                    if _AcquireFLock_
+                    if _AcquireFLock_ nonblock
                     then
                         _DoRotateLogFiles_ DEBUG TEMP
                         _ReleaseFLock_
@@ -2842,7 +3093,7 @@ Scribe_Menu()
                 e)
                     if [ "$menu_type" = "main" ]
                     then
-                        printf "\n$white Thanks for using scribe! $std\n\n\n"
+                        printf "\n ${white}Thanks for using scribe!${std}\n\n\n"
                         exit 0
                     else
                         menu_type="main"
@@ -2964,6 +3215,10 @@ case "$action" in
     forceupdate)
         Update_Version force
         ;;
+    amtmupdate)
+        ScriptUpdateFromAMTM "$@"
+        exit "$?"
+        ;;
     develop)
         script_branch="develop"
         SetUpRepoBranchVars
@@ -3028,7 +3283,7 @@ case "$action" in
         ;;
 
     LogRotateDebug)
-        if _AcquireFLock_
+        if _AcquireFLock_ nonblock
         then
             delfr "$lr_temp"
             _DoRotateLogFiles_ DEBUG TEMP

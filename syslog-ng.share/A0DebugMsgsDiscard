@@ -1,0 +1,13 @@
+#######################################################
+# Discard all incoming log messages that are tagged
+# with the 'debug' severity level.
+# Last Modified: 2026-Mar-01
+#######################################################
+
+log {
+    source(src);
+    filter { level(debug); };
+    flags(final);
+};
+
+#eof#

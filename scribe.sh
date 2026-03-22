@@ -36,7 +36,7 @@
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.11"
 readonly scriptVer_TAG="26030223"
-scribe_branch="develop"
+scribe_branch="master"
 script_branch="$scribe_branch"
 
 # To support automatic script updates from AMTM #

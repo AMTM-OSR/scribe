@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Mar-02
+# Last Modified: 2026-Apr-09
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -34,8 +34,8 @@
 #################################################################
 
 readonly script_name="scribe"
-readonly scribe_ver="v3.2.11"
-readonly scriptVer_TAG="26030223"
+readonly scribe_ver="v3.2.12"
+readonly scriptVer_TAG="26040923"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -3324,7 +3324,7 @@ case "$action" in
     service_event)
         if ! SyslogNg_Running || [ -z "$2" ] || \
            [ "$2" = "stop" ] || [ "$3" = "ntpd" ] || \
-           echo "$3" | grep -qE "^$uiscribeName"
+           echo "$3" | grep "^${uiscribeName}" | grep -qv "^${uiscribeName}config"
         then exit 0
         fi
         #################################################################
@@ -3337,8 +3337,9 @@ case "$action" in
         lastTimeSecs="$(_ServiceEventTime_ check)"
         thisTimeDiff="$(echo "$currTimeSecs $lastTimeSecs" | awk -F ' ' '{printf("%s", $1 - $2);}')"
         
-        #Only once every 20 minutes at most#
-        if [ "$thisTimeDiff" -ge 1200 ]
+        # Every 20 minutes *OR* symbolic link *NOT* found #
+        if [ "$thisTimeDiff" -ge 1200 ] || \
+           { [ ! -L "$syslog_loc" ] && [ "$thisTimeDiff" -ge 60 ] ; }
         then
             _ServiceEventTime_ update "$currTimeSecs"
             . "$rcfunc_loc"

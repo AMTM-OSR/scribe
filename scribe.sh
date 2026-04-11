@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Apr-09
+# Last Modified: 2026-Apr-11
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -35,12 +35,15 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.12"
-readonly scriptVer_TAG="26040923"
+readonly scriptVer_TAG="26041104"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
 # To support automatic script updates from AMTM #
 doScriptUpdateFromAMTM=true
+
+# Workaround for Entware ELF binaries compiled with RUNPATH #
+unset LD_LIBRARY_PATH
 
 # Ensure firmware binaries are used, not Entware #
 export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
@@ -1327,7 +1330,7 @@ SysLogNg_Config_Sync()
     sng_conf_vtag1="@version:"
     sng_conf_vtag2="${sng_conf_vtag1}[[:blank:]]*"
     sng_version_str="$( $sng --version | grep -m1 "$sng" | grep -oE '[0-9]{1,2}([_.][0-9]{1,2})' )"
-    sng_conf_verstr="$( grep -Em1 "^$sng_conf_vtag2" "$sng_conf" | grep -oE '[0-9]{1,2}([_.][0-9]{1,2})' )"
+    sng_conf_verstr="$( grep -Em1 "^$sng_conf_vtag2" "$sng_conf" | grep -oE '[0-9]{1,2}([_.][0-9]{1,2})+' )"
 
     if grep -q 'stats_freq(' "$sng_conf"  || \
        ! _SysLogMsgSizeFromConfig_ check  || \

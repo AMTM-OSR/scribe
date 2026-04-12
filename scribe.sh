@@ -35,7 +35,7 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.12"
-readonly scriptVer_TAG="26041104"
+readonly scriptVer_TAG="26041123"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -1330,7 +1330,7 @@ SysLogNg_Config_Sync()
     sng_conf_vtag1="@version:"
     sng_conf_vtag2="${sng_conf_vtag1}[[:blank:]]*"
     sng_version_str="$( $sng --version | grep -m1 "$sng" | grep -oE '[0-9]{1,2}([_.][0-9]{1,2})' )"
-    sng_conf_verstr="$( grep -Em1 "^$sng_conf_vtag2" "$sng_conf" | grep -oE '[0-9]{1,2}([_.][0-9]{1,2})+' )"
+    sng_conf_verstr="$( grep -Em1 "^$sng_conf_vtag2" "$sng_conf" | awk -F': ' '{print $2}' )"
 
     if grep -q 'stats_freq(' "$sng_conf"  || \
        ! _SysLogMsgSizeFromConfig_ check  || \

@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Apr-11
+# Last Modified: 2026-Apr-15
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -34,8 +34,8 @@
 #################################################################
 
 readonly script_name="scribe"
-readonly scribe_ver="v3.2.12"
-readonly scriptVer_TAG="26041123"
+readonly scribe_ver="v3.2.13"
+readonly scriptVer_TAG="26041500"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -902,7 +902,7 @@ SysLogd_Check()
 sed_srvcEvent()
 {
     printf "$white %34s" "checking $( strip_path "$srvcEvent" ) ..."
-    if [ -f "$srvcEvent" ]
+    if [ -s "$srvcEvent" ]
     then
         [ "$( grep -c "#!/bin/sh" "$srvcEvent" )" -ne 1 ] && sed -i "1s~^~#!/bin/sh -\n\n~" "$srvcEvent"
         if grep -q "$script_name kill-logger" "$srvcEvent"
@@ -992,13 +992,13 @@ LogRotate_CronJob_PostMount_Check()
 sed_unMount()
 {
     printf "$white %34s" "checking $( strip_path "$unMount" ) ..."
-    if [ -f "$unMount" ]
+    if [ -s "$unMount" ]
     then
         [ "$( grep -c "#!/bin/sh" "$unMount" )" -ne 1 ] && sed -i "1s~^~#!/bin/sh -\n\n~" "$unMount"
 
         if grep -q " && $script_name stop nologo" "$unMount"
         then
-            sed -i "/&& $script_name stop nologo/d" "$unMount" 
+            sed -i "/&& $script_name stop nologo/d" "$unMount"
         fi
         if ! grep -q "&& $script_loc stop nologo unmount" "$unMount"
         then
@@ -3340,8 +3340,8 @@ case "$action" in
         lastTimeSecs="$(_ServiceEventTime_ check)"
         thisTimeDiff="$(echo "$currTimeSecs $lastTimeSecs" | awk -F ' ' '{printf("%s", $1 - $2);}')"
         
-        # Every 20 minutes *OR* symbolic link *NOT* found #
-        if [ "$thisTimeDiff" -ge 1200 ] || \
+        # Every 15 minutes *OR* symbolic link *NOT* found #
+        if [ "$thisTimeDiff" -ge 900 ] || \
            { [ ! -L "$syslog_loc" ] && [ "$thisTimeDiff" -ge 60 ] ; }
         then
             _ServiceEventTime_ update "$currTimeSecs"

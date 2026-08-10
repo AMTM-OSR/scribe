@@ -1,20 +1,39 @@
 # put wlceventd Assoc/ReAssoc/Disassoc messages into /opt/var/log/wlceventd.log
 
+################################################
+# This configuration file now includes the
+# the system new "/jffs/wifi_wlc.log" file
+# as a 'source' for the filtered log file.
+# Last Modified: 2026-Aug-01
+################################################
+source s_wifi_wlc {
+      wildcard_file(base_dir("/jffs")
+                  filename_pattern("wifi_wlc.log")
+                  recursive(no) max-files(1)
+                  follow-method(inotify)
+                  monitor-method(inotify)
+                  log_fetch_limit(500)
+                  flags(syslog-protocol));
+};
+
 destination d_wlceventd { 
     file("/opt/var/log/wlceventd.log");
 };
 
 filter f_wlceventd {
     ( ( program("WLCEVENTD") or
-    program("wlceventd") ) and
-    ( message("ssoc") or
-    message("uth") ) ) or
-    ( program("syslog") and
-    message("wlceventd") );
+        program("wlceventd") )
+      and
+      ( message("ssoc") or
+        message("uth") )
+    ) or
+    (program("syslog") and
+     message("wlceventd") );
 };
 
 log {
     source(src);
+    source(s_wifi_wlc);
     filter(f_wlceventd);
     destination(d_wlceventd);
     flags(final);

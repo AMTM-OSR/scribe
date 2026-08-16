@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Apr-15
+# Last Modified: 2026-Aug-16
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -26,16 +26,18 @@
 # shellcheck disable=SC1091
 # shellcheck disable=SC2009
 # SC2009 = Consider uing pgrep ~ Note that pgrep doesn't exist in asuswrt (exists in Entware procps-ng)
+# shellcheck disable=SC2012
 # shellcheck disable=SC2059
 # SC2059 = Don't use variables in the printf format string. Use printf "..%s.." "$foo" ~ I (try to) only embed the ansi color escapes in printf strings
 # shellcheck disable=SC2034
+# shellcheck disable=SC2155
 # shellcheck disable=SC3043
 # shellcheck disable=SC3045
 #################################################################
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.13"
-readonly scriptVer_TAG="26041500"
+readonly scriptVer_TAG="26081609"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -173,12 +175,12 @@ readonly sng_share="/opt/share/$sng"
 readonly lr_share="/opt/share/$lr"
 readonly share_ex="/opt/share/*/examples"
 readonly script_bakname="${TMP}/${script_name}-backup.tar.gz"
-readonly fire_start="$script_d/firewall-start"
-readonly srvcEvent="$script_d/service-event"
-readonly postMount="$script_d/post-mount"
 readonly unMount="$script_d/unmount"
-readonly skynet="$script_d/firewall"
-readonly sky_req="6.9.2"
+readonly postMount="$script_d/post-mount"
+readonly srvcEvent="$script_d/service-event"
+readonly firewallStart="$script_d/firewall-start"
+readonly skynetScript="$script_d/firewall"
+readonly skynetVerReq="6.9.2"
 readonly divers="/opt/bin/diversion"
 readonly div_req="4.1"
 
@@ -259,22 +261,21 @@ readonly uiscribePath="$script_d/$uiscribeName"
 readonly uiscribeVerRegExp="v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})"
 readonly menuSepStr="${white} =*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=${CLRct}\n\n"
 
-isInteractive=false
-[ -t 0 ] && ! tty | grep -qwi "NOT" && isInteractive=true
-if ! "$isInteractive" ; then banner=false ; fi
+if [ -t 0 ] && ! tty | grep -qwi 'NOT'
+then isInteractive=true
+else isInteractive=false ; banner=false
+fi
 
-# Check if Scribe is already installed by looking for link in /opt/bin #
-[ -e "/opt/bin/$script_name" ] && scribeInstalled=true || scribeInstalled=false
+# Check if Scribe is already installed by looking for symbolic link #
+if [ -L "/opt/bin/$script_name" ] && [ -x "/opt/bin/$script_name" ]
+then scribeInstalled=true
+else scribeInstalled=false
+fi
 
 # Check if uiScribe is installed #
-[ -e "$uiscribePath" ] && uiScribeInstalled=true || uiScribeInstalled=false
-
-# Check if Skynet is installed
-if [ -e "$fire_start" ] && grep -q "skynetloc" "$fire_start"
-then
-    skynet_inst=true
-else
-    skynet_inst=false
+if [ -s "$uiscribePath" ] && [ -x "$uiscribePath" ]
+then uiScribeInstalled=true
+else uiScribeInstalled=false
 fi
 
 #### functions ####
@@ -287,6 +288,20 @@ SetUpRepoBranchVars()
    script_repoFile="$raw_git/$script_author/$script_name/$script_branch/${script_name}.sh"
    script_repo_ZIP="https://github.com/$script_author/$script_name/archive/${script_branch}.zip"
    unzip_dirPath="$TMP/${script_name}-$script_branch"
+}
+
+#-------------------------------------#
+# Added by Martinski W. [2026-Aug-16] #
+#-------------------------------------#
+_CheckSkynetInstalled_()
+{
+   if [ ! -s "$skynetScript" ] || [ ! -s "$firewallStart" ]
+   then return 1
+   fi
+   if grep -qE "$skynetScript .* skynetloc=.*/skynet .*# Skynet" "$firewallStart"
+   then return 0
+   else return 1
+   fi
 }
 
 present(){ printf "$green present. $std\n"; }
@@ -317,6 +332,11 @@ AppendDateTimeStamp()
 SyslogNg_Running(){ if [ -n "$(pidof "$sng")" ]; then true; else false; fi; }
 
 SyslogD_Running(){ if [ -n "$(pidof "$sld")" ]; then true; else false; fi; }
+
+if _CheckSkynetInstalled_
+then skynetInstalled=true
+else skynetInstalled=false
+fi
 
 ##-------------------------------------##
 ## Added by Martinski W. [2025-Nov-30] ##
@@ -1503,7 +1523,7 @@ Force_Install()
 ##----------------------------------------##
 SysLogNg_ShowConfig()
 {
-    if [ -e "$sng_loc" ]
+    if [ -s "$sng_loc" ]
     then
         delfr "$sngconf_merged"
         delfr "$sngconf_error"
@@ -1835,30 +1855,35 @@ Setup_Scribe()
     printf "\n ${white}setting up %s ...\n" "$script_name"
     cp -fp "$unzip_dirPath/${script_name}.sh" "$script_loc"
     chmod 0755 "$script_loc"
-    [ ! -e "/opt/bin/$script_name" ] && ln -s "$script_loc" /opt/bin
+    if [ ! -L "/opt/bin/$script_name" ] || [ ! -x "/opt/bin/$script_name" ]
+    then ln -sf "$script_loc" "/opt/bin/$script_name"
+    fi
 
     # Install correct firewall or skynet file, these are mutually exclusive #
-    if "$skynet_inst"
+    if "$skynetInstalled"
     then
         delfr "$sngd_d/firewall"
         delfr "$lrd_d/firewall"
-        if [ ! -e "$sngd_d/skynet" ] || [ "$1" = "ALL" ]
+        if [ ! -s "$sngd_d/skynet" ] || [ "$1" = "ALL" ]
         then
             printf "$white installing %s Skynet filter ...\n" "$sng"
-            cp -p "$sng_share/examples/skynet" "$sngd_d" 
+            cp -fp "$sng_share/examples/skynet" "$sngd_d/skynet"
+            chmod 600 "$sngd_d/skynet"
         fi
         printf "$blue setting Skynet log file location$white ...\n"
-        skynetlog="$( grep -m1 'file("' $sngd_d/skynet | awk -F\" '{ printf ( $2 ); }'; )"
-        sh $skynet settings syslog "$skynetlog" > /dev/null 2>&1
+        skynetLOG="$( grep -m1 'file("' $sngd_d/skynet | awk -F\" '{ printf ( $2 ); }'; )"
+        sh $skynetScript settings syslog "$skynetLOG" > /dev/null 2>&1
     else
         delfr "$sngd_d/skynet"
         delfr "$lrd_d/skynet"
-        if [ ! -e "$sngd_d/firewall" ] || [ "$1" = "ALL" ]
+        if [ ! -s "$sngd_d/firewall" ] || [ "$1" = "ALL" ]
         then
             printf "$white installing %s firewall filter ...\n" "$sng"
-            cp -p "$sng_share/examples/firewall" "$sngd_d"
+            cp -fp "$sng_share/examples/firewall" "$sngd_d/firewall"
+            chmod 600 "$sngd_d/firewall"
             printf "$white installing firewall log rotation ...\n"
-            cp -p "$lr_share/examples/firewall" "$lrd_d"
+            cp -fp "$lr_share/examples/firewall" "$lrd_d/firewall"
+            chmod 600 "$lrd_d/firewall"
         fi
     fi
     finished
@@ -1925,15 +1950,15 @@ PreInstall_Check()
     fi
 
     # check if Skynet is installed and version number #
-    if "$skynet_inst"
+    if "$skynetInstalled"
     then
         printf "\n\n$white Skynet detected, checking version ..."
-        sky_ver="$( grep -m1 -oE 'v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})' "$skynet" )"
-        printf " version %s detected ..." "$sky_ver"
-        if [ "$( VersionStrToNum "$sky_ver" )" -lt "$( VersionStrToNum "$sky_req" )" ]
+        skynetVers="$( grep -m1 -oE 'v[0-9]{1,2}([.][0-9]{1,2})([.][0-9]{1,2})' "$skynetScript" )"
+        printf " version %s detected ..." "$skynetVers"
+        if [ "$( VersionStrToNum "$skynetVers" )" -lt "$( VersionStrToNum "$skynetVerReq" )" ]
         then
             printf "$red update required!\n"
-            printf " Skynet %s or later is required! $std\n" "$sky_req"
+            printf " Skynet %s or later is required! $std\n" "$skynetVerReq"
             reqsOK=false
         else
             printf "$green okay! $std\n"
@@ -1970,7 +1995,7 @@ PreInstall_Check()
 ##----------------------------------------##
 Menu_Install()
 {
-    if [ ! -e "$sng_loc" ]
+    if [ ! -s "$sng_loc" ]
     then
         Do_Install "$sng"
     elif Force_Install "$sng"
@@ -1991,7 +2016,7 @@ Menu_Install()
     printf '' > "$syslogD_InitRebootLogFPath"
     $S01sng_init start
 
-    if [ ! -e "$lr_loc" ]
+    if [ ! -s "$lr_loc" ]
     then
         Do_Install "$lr"
     elif Force_Install "$lr"
@@ -2124,7 +2149,7 @@ doUninstall()
 {
     printf "\n\n"
     banner=false  # Suppress certain messages #
-    if [ -e "$sng_loc" ]
+    if [ -s "$sng_loc" ]
     then
         if SyslogNg_Running
         then StopSyslogNg
@@ -2139,16 +2164,16 @@ doUninstall()
         delfr "$sngd_d"
         delfr "$sng_share"
 
-        if "$skynet_inst" && ! "$reinst"
+        if "$skynetInstalled" && ! "$reinst"
         then
             printf "$white restoring Skynet logging to %s ..." "$syslog_loc"
-            sh $skynet settings syslog "$syslog_loc" > /dev/null 2>&1
+            sh $skynetScript settings syslog "$syslog_loc" > /dev/null 2>&1
         fi
     else
         not_installed "$sng"
     fi
 
-    if [ -e "$lr_loc" ]
+    if [ -s "$lr_loc" ]
     then
         StopLogRotate
         sed -i "/cru a ${logRotateStr}/d" "$postMount"
@@ -2476,11 +2501,11 @@ Gather_Debug()
     fi
 
     printf "\n%s\n### Skynet log locations:\n" "$debug_sep" >> "$script_debug"
-    if "$skynet_inst"
+    if "$skynetInstalled"
     then
-        skynetloc="$( grep -ow "skynetloc=.* # Skynet" $fire_start 2>/dev/null | grep -vE "^#" | awk '{print $1}' | cut -c 11- )"
-        skynetcfg="${skynetloc}/skynet.cfg"
-        grep "syslog" "$skynetcfg" >> "$script_debug"
+        skynetLoc="$(grep -oE 'skynetloc=.*/skynet .*# Skynet' "$firewallStart" 2>/dev/null | grep -vE '^#' | awk -F' ' '{print $1}' | cut -d'=' -f2-)"
+        skynetCFG="${skynetLoc}/skynet.cfg"
+        grep "syslog" "$skynetCFG" >> "$script_debug"
     else
         printf "#### Skynet not installed! ####\n%s\n" "$debug_sep" >> "$script_debug"
     fi
@@ -2493,8 +2518,8 @@ Gather_Debug()
     for usbMount in /tmp/mnt/*
     do
         usbDrive="$(basename "$usbMount")"
-        # note that if the usb drive name has a comma in it, then sed will fail #
-        if [ -z "$(echo "$usbDrive" | grep ',')" ]
+        # If the USB drive name has a comma in it, 'sed' will fail #
+        if ! echo "$usbDrive" | grep -q ','
         then
             sed -i "s,${usbDrive},usb#${mntNum},g" "$script_debug"
         else

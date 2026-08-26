@@ -1272,7 +1272,7 @@ Check_Dir_Links()
         # shellcheck source=/opt/etc/init.d/rc.func.syslog-ng
         #################################################################
         . "$rcfunc_loc"
-        kill_logger true
+        kill_logger false
         updated
     else
         present
@@ -2732,6 +2732,7 @@ readonly scriptFName="${0##*/}"
 readonly TEMP_DIR="/tmp/var/tmp"
 readonly logDateTime="%Y-%b-%d %I:%M:%S %p %Z"
 readonly logFilePath="${TEMP_DIR}/${scriptFName%.*}.LOG"
+readonly syslogD_InitRebootLogPath="/opt/var/log/syslogd.ScribeInitReboot.LOG"
 
 export PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
 
@@ -2763,6 +2764,8 @@ do
     if "$klogdEXIT" && "$syslogdEXIT"
     then
         _LogDebugMsg_ "System loggers [klogd & syslogd] were terminated."
+        sleep 5
+        [ -f "$syslogD_InitRebootLogPath" ] && printf '' > "$syslogD_InitRebootLogPath"
         _LogDebugMsg_ "Exiting Background Loop [$tryCount][$$]..."
         break
     fi

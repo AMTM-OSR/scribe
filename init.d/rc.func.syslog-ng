@@ -136,33 +136,37 @@ kill_logger()
     ## Modified by Martinski W. [2026-Jan-11] ##
     ##----------------------------------------##
     # If syslogd was running, '$syslog_loc' will exist as a regular file (NOT a link) #
-    # This might be during bootup, or when starting Scribe #
+    # Transfer initial boot logs ONLY on fresh start when syslog-ng is not yet running #
     if [ ! -L "$syslog_loc" ]
     then
-        if [ -s "$messagesLogSAVED" ]
-        then
-            $catCmd "$messagesLogSAVED" >> "$optmsg"
-            $rmCmd -f "$messagesLogSAVED"
-        fi
         log1Msg="### Top of Log File ###"
-        printf '' > "$syslogD_InitRebootLogPath"
 
-        if [ ! -d "${syslog_loc}-1" ] && \
-           [ ! -L "${syslog_loc}-1" ] && \
-           [ -s "${syslog_loc}-1" ]   && \
-           [ "$(head -n1 "${syslog_loc}-1")" != "$log1Msg" ] && \
-           [ "$(tail -n1 "${syslog_loc}-1")" != "$log1Msg" ]
-        then  ## Transfer 1st part of the system log ##
-            if ! "$filterSyslogInitRebootLogMsgs"
-            then $catCmd "${syslog_loc}-1" >> "$optmsg"
-            else $catCmd "${syslog_loc}-1" > "$syslogD_InitRebootLogPath"
-            fi
-        fi
-        if [ -s "$syslog_loc" ]
+        if [ -z "$( $pidofCmd syslog-ng )" ] && "$serviceCallOK"
         then
-            if ! "$filterSyslogInitRebootLogMsgs"
-            then $catCmd "$syslog_loc" >> "$optmsg"
-            else $catCmd "$syslog_loc" >> "$syslogD_InitRebootLogPath"
+            if [ -s "$messagesLogSAVED" ]
+            then
+                $catCmd "$messagesLogSAVED" >> "$optmsg"
+                $rmCmd -f "$messagesLogSAVED"
+            fi
+            printf '' > "$syslogD_InitRebootLogPath"
+
+            if [ ! -d "${syslog_loc}-1" ] && \
+               [ ! -L "${syslog_loc}-1" ] && \
+               [ -s "${syslog_loc}-1" ]   && \
+               [ "$(head -n1 "${syslog_loc}-1")" != "$log1Msg" ] && \
+               [ "$(tail -n1 "${syslog_loc}-1")" != "$log1Msg" ]
+            then  ## Transfer 1st part of the system log ##
+                if ! "$filterSyslogInitRebootLogMsgs"
+                then $catCmd "${syslog_loc}-1" >> "$optmsg"
+                else $catCmd "${syslog_loc}-1" > "$syslogD_InitRebootLogPath"
+                fi
+            fi
+            if [ -s "$syslog_loc" ]
+            then
+                if ! "$filterSyslogInitRebootLogMsgs"
+                then $catCmd "$syslog_loc" >> "$optmsg"
+                else $catCmd "$syslog_loc" >> "$syslogD_InitRebootLogPath"
+                fi
             fi
         fi
         $rmCmd -f "$syslog_loc" "${syslog_loc}-1"

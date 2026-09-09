@@ -1,8 +1,8 @@
 #!/bin/sh -
 #
 # NB: rc.func only runs PRECMD on "start"
-# Last Modified: 2026-Apr-09
-# VERSION="3.1.6"
+# Last Modified: 2026-Sep-08
+# VERSION="3.1.7"
 #-------------------------------------------
 
 ## Run the F/W built-in native commands ##
@@ -21,10 +21,11 @@ logTagStr="scribe:kill_logger[$$]"
 logPrioNum="-p 4"
 
 ##----------------------------------------##
-## Modified by Martinski W. [2026-Apr-09] ##
+## Modified by Martinski W. [2026-Sep-08] ##
 ##----------------------------------------##
 kill_logger()
 {
+    local varLibDIR  lrStatusFILE
     local serviceCallOK  prevSysLog_Loc  messagesLogSAVED
     local scribeScriptFPath="/jffs/scripts/scribe"
     local booleanStr=false  filterSyslogInitRebootLogMsgs=true
@@ -100,14 +101,14 @@ kill_logger()
 
     [ "$syslog_loc" = "$jffslog" ] && isjffs=true
 
-    # Touch 'logrotate.status' if it doesn't exist so syslog-ng doesn't whine #
-    [ ! -f /var/lib/logrotate.status ] && touch /var/lib/logrotate.status
-
-    ##----------------------------------------##
-    ## Modified by Martinski W. [2025-Jun-16] ##
-    ##----------------------------------------##
-    # Set correct permissions to avoid "world-readable" status #
-    chmod 600 /var/lib/logrotate.status
+    [ ! -d /opt/var/lib ] && mkdir -p -m 755 /opt/var/lib
+    for varLibDIR in  /var/lib  /opt/var/lib
+    do
+        lrStatusFILE="${varLibDIR}/logrotate.status"
+        [ ! -f "$lrStatusFILE" ] && touch "$lrStatusFILE"
+        # Set correct permissions to avoid "world-readable" status #
+        chmod 600 "$lrStatusFILE"
+    done
 
     # Export timezone if not already set #
     [ -z "${TZ:+xSETx}" ] && export TZ="$($catCmd /etc/TZ)"

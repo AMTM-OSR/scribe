@@ -18,7 +18,7 @@
 #   curl --retry 3 "https://raw.githubusercontent.com/AMTM-OSR/scribe/master/scribe.h" -o "/jffs/scripts/scribe" && chmod 0755 /jffs/scripts/scribe && /jffs/scripts/scribe install
 #
 ##################################################################
-# Last Modified: 2026-Aug-16
+# Last Modified: 2026-Sep-08
 #-----------------------------------------------------------------
 
 ################       Shellcheck directives     ################
@@ -37,7 +37,7 @@
 
 readonly script_name="scribe"
 readonly scribe_ver="v3.2.13"
-readonly scriptVer_TAG="26081609"
+readonly scriptVer_TAG="26090820"
 scribe_branch="develop"
 script_branch="$scribe_branch"
 
@@ -547,6 +547,22 @@ Create_Config()
     # Assume uiScribe is still running if it was before stopping syslog-ng #
 }
 
+##-------------------------------------##
+## Added by Martinski W. [2026-Sep-08] ##
+##-------------------------------------##
+_Check_LogRotate_StatusFile_()
+{
+   local varLibDIR  lrStatusFILE
+   [ ! -d /opt/var/lib ] && mkdir -p -m 755 /opt/var/lib
+   for varLibDIR in  /var/lib  /opt/var/lib
+   do
+       lrStatusFILE="${varLibDIR}/logrotate.status"
+       [ ! -f "$lrStatusFILE" ] && touch "$lrStatusFILE"
+       # Set correct permissions to avoid "world-readable" status #
+       chmod 600 "$lrStatusFILE"
+   done
+}
+
 ##----------------------------------------##
 ## Modified by Martinski W. [2026-Jan-30] ##
 ##----------------------------------------##
@@ -572,12 +588,7 @@ Read_Config()
     then
         _Config_Option_Update_ FILTER_INIT_REBOOT_LOG true
     fi
-
-    # Set correct permissions to avoid "world-readable" status #
-    if [ "$action" != "debug" ] && \
-       [ -f /var/lib/logrotate.status ]
-    then chmod 600 /var/lib/logrotate.status
-    fi
+    [ "$action" != "debug" ] && _Check_LogRotate_StatusFile_
 }
 
 ##----------------------------------------##
@@ -1002,8 +1013,7 @@ LogRotate_CronJob_PostMount_Check()
     else
         present
     fi
-    # Set correct permissions to avoid "world-readable" status #
-    [ -f /var/lib/logrotate.status ] && chmod 600 /var/lib/logrotate.status
+    _Check_LogRotate_StatusFile_
 }
 
 ##----------------------------------------##
@@ -1562,13 +1572,16 @@ _AcquireFLock_()
    if [ $# -gt 0 ] && [ "$1" = "waitblock" ]
    then opts=""
    fi
-   eval exec "$LR_FLock_FD>$LR_FLock_FName"
+   eval exec "${LR_FLock_FD}>$LR_FLock_FName"
    flock -x $opts "$LR_FLock_FD" 2>/dev/null
    return "$?"
 }
 
 _ReleaseFLock_()
-{ flock -u "$LR_FLock_FD" 2>/dev/null ; }
+{
+   flock -u "$LR_FLock_FD" 2>/dev/null
+   eval exec "${LR_FLock_FD}>&-"
+}
 
 ##-------------------------------------##
 ## Added by Martinski W. [2026-Jan-04] ##
@@ -2458,7 +2471,14 @@ Gather_Debug()
         printf "\n%s\n### init.d directory:\n" "$debug_sep"
         ls -l /opt/etc/init.d
         printf "\n%s\n### check logrotate.status \n" "$debug_sep"
-        ls -l /var/lib/logrotate.status
+        for varLibDIR in  /var/lib  /opt/var/lib
+        do
+            lrStatusFILE="${varLibDIR}/logrotate.status"
+            if [ -f "$lrStatusFILE" ]
+            then ls -lL "$lrStatusFILE"
+            else printf "*WARNING*: Status file '$lrStatusFILE' is NOT found.\n"
+            fi
+        done
         printf "\n%s\n### contents of S01syslog-ng\n" "$debug_sep"
         cat /opt/etc/init.d/S01syslog-ng
         printf "\n%s\n### /opt/var/log directory:\n" "$debug_sep"

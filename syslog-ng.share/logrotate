@@ -1,19 +1,29 @@
 # gather logrotate logs together for unified log
 
-destination d_logrotate { 
-    file("/opt/var/log/logrotate.log");
+source s_var_lr_status {
+    file("/var/lib/logrotate.status" program-override("logrotate") flags(no-parse));
 };
 
-source s_lr_status {
-    file("/var/lib/logrotate.status" program-override("logrotate") flags(no-parse));
+#----------------------------------------------#
+# Include file status located in directory:
+# /opt/var/lib
+# Last Modified: 2026-Sep-12
+#----------------------------------------------#
+source s_opt_lr_status {
+    file("/opt/var/lib/logrotate.status" program-override("logrotate") flags(no-parse));
 };
 
 source s_lr_daily {
     file("/opt/tmp/logrotate.daily" program-override("logrotate") flags(no-parse));
 };
 
+destination d_logrotate { 
+    file("/opt/var/log/logrotate.log");
+};
+
 log {
-    source(s_lr_status);
+    source(s_var_lr_status);
+    source(s_opt_lr_status);
     source(s_lr_daily);
     destination(d_logrotate);
     flags(final);

@@ -4,7 +4,7 @@
 # This configuration file now includes the
 # the system new "/jffs/wifi_wlc.log" file
 # as a 'source' for the filtered log file.
-# Last Modified: 2026-Aug-01
+# Last Modified: 2026-Sep-29
 ################################################
 source s_wifi_wlc {
       wildcard_file(base_dir("/jffs")
@@ -12,8 +12,7 @@ source s_wifi_wlc {
                   recursive(no) max-files(1)
                   follow-method(inotify)
                   monitor-method(inotify)
-                  log_fetch_limit(500)
-                  flags(syslog-protocol));
+                  log_fetch_limit(500));
 };
 
 destination d_wlceventd { 
@@ -22,13 +21,16 @@ destination d_wlceventd {
 
 filter f_wlceventd {
     ( ( program("WLCEVENTD") or
-        program("wlceventd") )
+        program("wlceventd") or
+        message("wlceventd_proc_event") )
       and
-      ( message("ssoc") or
-        message("uth") )
+      ( message("Auth") or 
+        message("Assoc") or
+        message("Deauth") or
+        message("Disassoc") )
     ) or
-    (program("syslog") and
-     message("wlceventd") );
+    ( program("syslog") and
+      message("wlceventd") );
 };
 
 log {

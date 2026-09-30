@@ -2,9 +2,9 @@
 
 ################################################
 # This configuration file now includes the
-# the system new "/jffs/wifi_wlc.log" file
-# as a 'source' for the filtered log file.
-# Last Modified: 2026-Sep-29
+# the system's new "/jffs/wifi_wlc.log" file
+# as a 'source' for the 'wlceventd.log' file.
+# Last Modified: 2026-Sep-30 [26093001]
 ################################################
 source s_wifi_wlc {
       wildcard_file(base_dir("/jffs")
@@ -15,29 +15,71 @@ source s_wifi_wlc {
                   log_fetch_limit(500));
 };
 
-destination d_wlceventd { 
-    file("/opt/var/log/wlceventd.log");
+filter f_wlceventd {
+    ( (program('WLCEVENTD') or
+       program('wlceventd') or
+       message('wlceventd_proc_event'))
+      and
+      (message('Auth') or 
+       message('Assoc') or
+       message('Deauth') or
+       message('Disassoc'))
+    ) or
+    (message('main\([0-9]+\)') and message('wlceventd'))
+    or
+    (program('syslog') and message('wlceventd'));
 };
 
-filter f_wlceventd {
-    ( ( program('WLCEVENTD') or
-        program('wlceventd') or
-        message('wlceventd_proc_event') )
-      and
-      ( message('Auth') or 
-        message('Assoc') or
-        message('Deauth') or
-        message('Disassoc') )
-    ) or
-    ( message('main\([0-9]+\)') and message('wlceventd') )
-    or
-    ( program('syslog') and message('wlceventd') );
+rewrite r_SetEmptyLEVEL {
+    set('' value(LEVEL_STR));
+};
+
+rewrite r_SetDefaultLEVEL {
+    set("${LEVEL} " value(LEVEL_STR));
+};
+
+rewrite r_UseDefaultsFields {
+    set("${DATE}" value(PREFIX_DATE));
+    set("${MSGHDR}" value(MSG_HEADER));
+};
+
+parser p_GetPrefixDATE {
+    regexp-parser(patterns('(?<PREFIX_DATE>.+) \[[a-z]+\] (?<MESSAGE>.*)')
+                  template("$MESSAGE"));
+};
+
+rewrite r_SetCustomFields {
+    set("\[${LEVEL}\] " value(LEVEL_STR));
+    set('wlceventd: ' value(MSG_HEADER));
+    subst('^[ \t]+', '', value(PREFIX_DATE));
+    subst('[ \t]+$', '', value(PREFIX_DATE));
+};
+
+template t_wlceventd 
+{ template("${PREFIX_DATE} ${LOGHOST} ${LEVEL_STR}${MSG_HEADER}${MESSAGE}\n"); };
+
+destination d_wlceventd {
+    file("/opt/var/log/wlceventd.log" template(t_wlceventd));
 };
 
 log {
     source(src);
     source(s_wifi_wlc);
     filter(f_wlceventd);
+    if (match(".+\\s\\d{4}\\s+\\[[a-z]+\\]\\s.+" value(MESSAGE))
+        and not program('wlceventd' flags('ignore-case')))
+    {
+       parser(p_GetPrefixDATE);
+       rewrite(r_SetCustomFields);
+    }
+    else
+    {
+       rewrite(r_UseDefaultsFields);
+       if (match('notice' value(LEVEL)))
+       { rewrite(r_SetEmptyLEVEL); }
+       else
+       { rewrite(r_SetDefaultLEVEL); };
+    };
     destination(d_wlceventd);
     flags(final);
 };

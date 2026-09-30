@@ -20,17 +20,18 @@ destination d_wlceventd {
 };
 
 filter f_wlceventd {
-    ( ( program("WLCEVENTD") or
-        program("wlceventd") or
-        message("wlceventd_proc_event") )
+    ( ( program('WLCEVENTD') or
+        program('wlceventd') or
+        message('wlceventd_proc_event') )
       and
-      ( message("Auth") or 
-        message("Assoc") or
-        message("Deauth") or
-        message("Disassoc") )
+      ( message('Auth') or 
+        message('Assoc') or
+        message('Deauth') or
+        message('Disassoc') )
     ) or
-    ( program("syslog") and
-      message("wlceventd") );
+    ( message('main\([0-9]+\)') and message('wlceventd') )
+    or
+    ( program('syslog') and message('wlceventd') );
 };
 
 log {
